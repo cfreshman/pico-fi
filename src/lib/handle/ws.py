@@ -5,10 +5,10 @@ import binascii
 import hashlib
 import select
 
-from z_io_ws import WS
-from z_lib import chain
-from z_logging import log
-from z_server import Orchestrator, Protocol, ProtocolHandler, connection
+from lib.stream.ws import WS
+from lib import chain
+from lib.logging import log
+from lib.server import Orchestrator, Protocol, ProtocolHandler, connection
 
 
 class WebSocket(ProtocolHandler):

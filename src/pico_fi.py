@@ -11,13 +11,13 @@ import network
 import machine
 import uasyncio
 
-from z_handle_dns import DNS
-from z_handle_http import HTTP
-from z_handle_ws import WebSocket
-from z_lib import encode, randalpha, delimit, LED
-from z_logging import cmt, log
-from z_server import Orchestrator, SocketPollHandler, IpSink
-from z_store import Store
+from lib.handle.dns import DNS
+from lib.handle.http import HTTP
+from lib.handle.ws import WebSocket
+from lib import encode, randlower, delimit, LED
+from lib.logging import cmt, log
+from lib.server import Orchestrator, SocketPollHandler, IpSink
+from lib.store import Store
 
 
 class App:
@@ -52,16 +52,15 @@ class App:
         self.orch = Orchestrator(self.poller)
         self.servers: SocketPollHandler = []
         self.routes = {
-            b'/portal': b'./portal.html',
-            b'/': b'./index.html',
+            b'/portal': b'/public/portal.html',
+            b'/': b'/public/index.html',
             b'/favicon.ico': b'',
             b'/get': self.get,
             b'/set': self.set,
             b'/api': self.api,
-            b'/pins': self.pins,
         }
 
-        if indicator and not isinstance(indicator, LED): indicator = LED(indicator, 5)
+        if indicator and not isinstance(indicator, LED): indicator = LED(indicator, .05)
         self.indicator = indicator or LED.Mock()
 
     def route(self, path):
@@ -91,7 +90,8 @@ class App:
         # start access point
         # if ID undefined, read previous or generate new
         STORE_ID_KEY = 'id'
-        if not self.id: self.id = Store.get(STORE_ID_KEY, 'w-'+randalpha(7))
+        if not self.id or isinstance(self.id, int):
+            self.id = Store.get(STORE_ID_KEY, 'w-'+randlower(self.id or 7))
         self.ap.config(essid=self.id)
         open('board.py', 'w').write(f'name = "{self.id}"')
         Store.write({ STORE_ID_KEY: self.id })
@@ -147,6 +147,7 @@ class App:
             log.info(f'network connected with ip', self.sta_ip)
         else:
             log.info('network connect failed')
+            self.sta.active(False)
 
     def stop(self):
         cmt('stop pico-fi')
@@ -197,7 +198,7 @@ class App:
             b'network-disconnect': self.api_network_disconnect,
         }.get(prefix, None)
         if handler: handler(req, data, res)
-        else: res.send(HTTP.Status.NOT_FOUND)
+        else: res.send(HTTP.Response.Status.NOT_FOUND)
 
     def api_networks(self, req: HTTP.Request, data, res: HTTP.Response):
         networks = [{
@@ -240,20 +241,6 @@ class App:
         self.sta.disconnect()
         Store.write({ 'network': None })
         res.ok()
-
-
-    _pins_template = """<!DOCTYPE html>
-    <html>
-        <head><title>Pico pins</title></head>
-        <body><h1>ESP8266 Pins</h1>
-            <table border="1"> <tr><th>Pin</th><th>Value</th></tr> %s </table>
-        </body>
-    </html>
-    """
-    _pins = [machine.Pin(i, machine.Pin.IN) for i in (0, 2, 4, 5, 12, 13, 14, 15)]
-    def pins(self, req: HTTP.Request, res: HTTP.Response):
-        rows = ['<tr><td>%s</td><td>%d</td></tr>' % (str(p), p.value()) for p in App._pins]
-        res.ok(App._pins_template % '\n'.join(rows))
 
 
     def run(self):

@@ -7,9 +7,9 @@ import io
 import select
 import socket
 
-from z_lib import MergedReadInto, defaulter_dict
-from z_logging import log
-from z_server import connection
+from lib import MergedReadInto, defaulter_dict
+from lib.logging import log
+from lib.server import connection
 
 
 class TCP:

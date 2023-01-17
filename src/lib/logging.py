@@ -8,7 +8,7 @@ from collections import namedtuple
 import machine
 import uasyncio
 
-from z_lib import defaulter_dict
+from lib import defaulter_dict
 
 CRITICAL = 50
 ERROR = 40

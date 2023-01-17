@@ -1,9 +1,9 @@
 import io
 import socket
 
-from z_io_tcp import TCP
-from z_lib import decode_bytes, defaulter_dict, encode_bytes, enum
-from z_logging import log
+from lib.stream.tcp import TCP
+from lib import decode_bytes, defaulter_dict, encode_bytes, enum
+from lib.logging import log
 
 
 class enum: pass

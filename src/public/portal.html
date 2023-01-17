@@ -131,9 +131,10 @@
 
   const get_reference_url = () => {
     const search = new URLSearchParams()
-    search.set('ip', JSON.stringify(ip))
-    search.set('networks', JSON.stringify(networks))
-    search.set('network_ssid', JSON.stringify(network_ssid))
+    // TODO fix memory allocation issue on server for long search strings
+    // search.set('ip', JSON.stringify(ip))
+    // search.set('networks', JSON.stringify(networks))
+    // search.set('network_ssid', JSON.stringify(network_ssid))
     return `http://`+ip+'/portal?'+search.toString()
   }
   
@@ -152,7 +153,7 @@
     }
     copied = true
     e.target.textContent = 'copied!'
-    Q('label.active').textContent = `Now connect this device to the same network and paste the Pico's IP in your browser`
+    Q('label.active').textContent = `Now connect this device to the same network and paste the Pico's IP into your browser`
     setTimout(render, 1000)
   }
 
@@ -303,8 +304,8 @@
             const [RSSI, ...ssid] = x.split(' ')
             return { ssid: ssid.join(' '), RSSI: -RSSI }
           })
-        case 'network-connect': return { ip: `test.ip.value.example` }
-        case 'network-status': return { ip: `test.ip.value.example` }
+        case 'network-connect': return { ip: `192.168.0.16` }
+        case 'network-status': return { ip: `192.168.0.16` }
         case 'network-switch': return
       }
     }

@@ -1,0 +1,2 @@
+esp8266-captive-portal: https://github.com/anson-vandoren/esp8266-captive-portal
+- the HTTP & DNS handling was originally forked from this library

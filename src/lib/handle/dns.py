@@ -3,9 +3,9 @@ DNS handler
 """
 import gc
 import select
-from z_logging import log
+from lib.logging import log
 
-from z_server import Protocol, Server
+from lib.server import Protocol, Server
 
 
 class DNS(Server):

@@ -4,7 +4,7 @@ simple global persistent state
 
 import json
 
-from z_logging import log
+from lib.logging import log
 
 
 # global state object

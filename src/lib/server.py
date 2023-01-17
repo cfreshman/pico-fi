@@ -5,8 +5,8 @@ common server interfaces
 import select
 import socket
 
-from z_logging import log
-from z_lib import encode
+from lib.logging import log
+from lib import encode
 
 """
 handler
@@ -26,7 +26,7 @@ transport
 """
 import socket
 
-from z_lib import defaulter_dict, enumstr
+from lib import defaulter_dict, enumstr
 
 
 class transport(enumstr):
