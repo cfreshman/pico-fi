@@ -1,0 +1,45 @@
+<meta content="width=device-width,initial-scale=1"name=viewport><meta charset=utf-8><style>*{font-size:1em}body{height:100%;width:100%;margin:1em}#root,body{display:flex;flex-direction:column;align-items:center;justify-content:center}body>*{margin-bottom:1em}#root>*{margin-bottom:.5em;min-width:15em;display:flex;justify-content:center}</style><div id=root></div><div id=error></div><button onclick=location.reload()>reload</button><script>const Q=(e,t)=>(t?e:document.body).querySelector(t||e),QQ=(e,t)=>Array.from((t?e:document.body).querySelectorAll(t||e)),json=(...e)=>fetch(...e).then(e=>e.json());let set=e=>json(`/set?data=${encodeURIComponent(JSON.stringify(e))}`),get=e=>json(`/get?data=${encodeURIComponent(JSON.stringify(e))}`),api=(e,t={})=>json(`/${e}`.replace(/\/\/?/,"/api/")+`?data=${encodeURIComponent(JSON.stringify(t))}`,{signal:(()=>{let e=new AbortController;return setTimeout(e.abort,1e3),e.signal})()});const rootL=Q("#root"),errorL=Q("#error");let networksL,keyL;const search=new URLSearchParams(location.search);let name=JSON.parse(search.get("name")||'"this Pico W"'),ip=JSON.parse(search.get("network_ssid")||"false"),networks=JSON.parse(search.get("networks")||"false"),network_ssid=JSON.parse(search.get("network_ssid")||"false");location.query="";const keySave=e=>`key-${e}`,knownPasswords={};let copied=!1;const load=()=>{api("networks").then(e=>{networks=[];let t=new Set;e.map(e=>{e.ssid&&!t.has(e.ssid)&&(t.add(e.ssid),networks.push(e))}),render()})};setInterval(()=>{keyL&&!keyL.value&&document.activeElement!==keyL&&load()},6e4),setTimeout(load,500);const debug=e=>errorL.textContent=e&&JSON.stringify(e),connect=e=>{if(ip)ip=!1,network_ssid=!1,render(),api("network-disconnect");else{e.target.innerHTML="connecting - please wait";let t=keyL.value;set({[keySave(network_ssid)]:t});let s=networks.filter(e=>e.ssid===network_ssid)[0];s.key=t,api("network-connect",s);let n=Date.now();debug(""),setTimeout(async()=>{try{let t,s=0;do t=await api("network-status"),s++;while(Date.now()-n<3e4&&!t.ip);t.ip?(e.target.textContent="connect",ip=t.ip,(error=error||ip)&&(errorL.textContent=error),render()):debug(t.error?.toString()||"unable to connect")}catch(o){debug(o)}},7e3)}},get_reference_url=()=>"http://"+ip+"/portal",confirm_and_copy_ip=e=>{api("network-switch");let t=get_reference_url();if(navigator.clipboard)navigator.clipboard.writeText(t);else{let s=document.createElement("textarea");s.value=t,document.body.appendChild(s),s.select(),document.execCommand("copy"),document.body.removeChild(s)}copied=!0,e.target.textContent="copied!",Q("label.active").textContent="Now connect this device to the same network and paste the IP into your browser",setTimout(render,1e3)},render=async()=>{networksL?.scrollTop,get_reference_url(),rootL.innerHTML=`
+    <div>
+      ${ip?`Pico W connected with  IP ${ip}`:`Connect ${name} to your wireless network`}
+    </div>
+    <div id="networks"></div>
+    ${ip?"":`
+    <input id="password" class='empty-hide' placeholder="network password" class="empty-hide" type="password" autocapitalize="false" style="width:15em">`}
+    <div class='empty-hide'>
+      ${ip?"":`<button id="connect-button" onclick="
+      network_ssid = false
+      render()
+      ">back</button>&nbsp;`}
+      <button id="connect-button" onclick="connect(event)" ${ip?'style="margin:auto"':""}>${ip?"disconnect":"connect"}</button>
+    </div>
+    ${ip?"<br/><br/>":""}
+    ${ip?location.host===ip?`
+    <a style="width:100%" href="http://${ip}">open Pico website</span>
+    `:copied?`
+    <div>
+      Now connect this device to the same network and paste the IP into your browser
+    </div>
+    `:`
+    <div>
+      View the Pico's website
+    </div>
+    <button style="width:100%" onclick="confirm_and_copy_ip(event)">copy ${ip}</button>
+    `:""}`,errorL.textContent="",await Promise.resolve(),networksL=Q("#networks"),keyL=Q("#password");let e=e=>{let t=e.ssid===network_ssid&&!ip,s=1- -(Number(e.RSSI)/120);return`
+      <button class='network' style="width:15em;display:${network_ssid&&e.ssid!==network_ssid?"none":"flex"}">
+        <span style='flex-shrink:1'>${e.ssid}&nbsp;</span>
+        <span style='flex-grow:1'></span>
+        <svg height='1em' width='1.5em' viewBox='0 0 1 1'>
+          <path ${t?"fill='#0003'":"fill='var(--accent)' opacity='.33'"} d='
+          M 0 1
+          L 1.5 0
+          L 1.5 1
+          L 0 1
+          '/>
+          <path ${t?"fill='#000'":"fill='var(--accent)'"} d='
+          M 0 1
+          L ${1.5*s} ${1-s}
+          L ${1.5*s} 1
+          L 0 1
+          '/>
+        </svg>
+      </button>`};networks?ip?networksL.outerHTML=networks.filter(e=>e.ssid===network_ssid).map(e).join("\n"):(networksL.outerHTML=networks.map(e).join("\n"),await Promise.resolve(),QQ(".network").map((e,t)=>e.addEventListener("click",e=>{if(network_ssid=network_ssid!==networks[t].ssid&&networks[t].ssid,render(),network_ssid){let s=keySave(network_ssid);get({[s]:!0}).then(e=>{if(e?.data){let t=e.data[s];!0!==t&&(keyL.value=t,knownPasswords[s]=t,Q("#connect-button").classList.add("active"))}keyL.click()})}})),keyL.addEventListener("keypress",e=>Q("#connect-button").classList.add("active"))):networksL.outerHTML="LOADING",QQ(".empty-hide").map(e=>e.style.display=network_ssid?"":"none"),Q("#networks .selected")?.scrollIntoView({block:"center"})};if(render(),setTimeout(async()=>{let e=await api("network-status");e.ip&&e.ssid&&(ip=e.ip,network_ssid=e.ssid,render())}),!location.host){api=async(e,t)=>{switch(await new Promise(e=>setTimeout(e,250)),e){case"networks":return"30 a wifi network,37 hello world,50 definitely not wifi,59 test test,59 foo bar baz,60 #6,64 #7,67 #8,72 #9,86 #10".split(",").map(e=>e.trim()).filter(e=>e).map(e=>{let[t,...s]=e.split(" ");return{ssid:s.join(" "),RSSI:-t}});case"network-connect":case"network-status":return{ip:"192.168.0.16"}}};let e={data:{}};get=t=>Promise.resolve(e.data),set=t=>(Object.assign(e,t),Promise.resolve())}</script>

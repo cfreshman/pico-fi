@@ -1,0 +1,235 @@
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta charset="utf-8">
+<style>*{font-size:1em;font-family:system-ui}html,body{height:100%;width:100%;margin:0}body,#root{display:flex;flex-direction:column;align-items:center;justify-content:center}body>*{margin-bottom:1em}#root>*{margin-bottom:.5em;min-width:15em;display:flex;justify-content:center}</style>
+
+<div id="root"></div>
+<div id="error"></div>
+<button onclick="location.reload()">reload</button>
+
+<script>
+  const Q = (L, q=undefined) => (q ? L : document.body).querySelector(q || L)
+  const QQ = (L, q=undefined) => Array.from((q ? L : document.body).querySelectorAll(q || L))
+  const json = (...rest) => fetch(...rest).then(res => res.json())
+  let set = data => json(`/set?data=${encodeURIComponent(JSON.stringify(data))}`)
+  let get = data => json(`/get?data=${encodeURIComponent(JSON.stringify(data))}`)
+  let api = (url, data={}) => json(`/${url}`.replace(/\/\/?/, '/api/') + `?data=${encodeURIComponent(JSON.stringify(data))}`, {
+    signal: (() => { const controller = new AbortController(); setTimeout(controller.abort, 1000); return controller.signal  })()
+  })
+
+  const rootL = Q('#root')
+  const errorL = Q('#error')
+  let networksL, keyL
+  const search = new URLSearchParams(location.search)
+  let name = JSON.parse(search.get('name') || '"this Pico W"')
+  let ip = JSON.parse(search.get('network_ssid') || 'false')
+  let networks = JSON.parse(search.get('networks') || 'false')
+  let network_ssid = JSON.parse(search.get('network_ssid') || 'false')
+  location.query = ''
+  const keySave = ssid => `key-${ssid}`
+  const knownPasswords = {}
+  let copied = false
+
+  const load = () => {
+    api('networks').then(x => {
+      networks = []
+      const ssid_set = new Set()
+      x.map(network => {
+        if (network.ssid && !ssid_set.has(network.ssid)) {
+          ssid_set.add(network.ssid)
+          networks.push(network)
+        }
+      })
+      render()
+    })
+  }
+  setInterval(() => {
+    if (keyL && !keyL.value && document.activeElement !== keyL) load()
+  }, 60_000)
+  setTimeout(load, 500)
+
+  const debug = x => errorL.textContent = x && JSON.stringify(x)
+  const connect = e => {
+    if (!ip) {
+      e.target.innerHTML = 'connecting - please wait'
+      const key = keyL.value
+      set({ [keySave(network_ssid)]: key })
+      const network = networks.filter(x => x.ssid === network_ssid)[0]
+      network.key = key
+      api('network-connect', network)
+      const start = Date.now()
+      debug('')
+      setTimeout(async () => {
+        try {
+          let status, i = 0
+          do {
+            status = await api('network-status')
+            i++
+          } while (Date.now() - start < 30_000 && !status.ip)
+          if (status.ip) {
+            e.target.textContent = 'connect'
+            ip = status.ip
+            error = error || ip
+            if (error) errorL.textContent = error
+            render()
+          } else {
+            debug(status.error?.toString() || 'unable to connect')
+          }
+        } catch (e) {
+          debug(e)
+        }
+      }, 7_000)
+    } else {
+      ip = false
+      network_ssid = false
+      render()
+      api('network-disconnect')
+    }
+  }
+
+  const get_reference_url = () => `http://`+ip+'/portal'
+
+  const confirm_and_copy_ip = e => {
+    api('network-switch')
+    const url = get_reference_url()
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(url)
+    } else {
+        const textarea = document.createElement('textarea')
+        textarea.value = url
+        document.body.appendChild(textarea)
+        textarea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textarea)
+    }
+    copied = true
+    e.target.textContent = 'copied!'
+    Q('label.active').textContent = `Now connect this device to the same network and paste the IP into your browser`
+    setTimout(render, 1000)
+  }
+
+  const render = async () => {
+    const scrollSave = networksL?.scrollTop
+    const url = get_reference_url()
+    rootL.innerHTML = `
+    <div>
+      ${ip ? `Pico W connected with IP ${ip}` : `Connect ${name} to your wireless network`}
+    </div>
+    <div id="networks"></div>
+    ${!ip
+    ? `
+    <input id="password" class='empty-hide' placeholder="network password" class="empty-hide" type="password" autocapitalize="false" style="width:15em">`
+    :''}
+    <div class='empty-hide'>
+      ${ip ? '' :
+      `<button id="connect-button" onclick="
+      network_ssid = false
+      render()
+      ">back</button>&nbsp;`}
+      <button id="connect-button" onclick="connect(event)" ${ip ? 'style="margin:auto"' : ''}>${ip ? 'disconnect' : 'connect'}</button>
+    </div>
+    ${ip ? `<br/><br/>` : ''}
+    ${!ip
+    ? ''
+    : location.host === ip
+    ? `
+    <a style="width:100%" href="http://${ip}">open Pico website</span>
+    `
+    : copied
+    ? `
+    <div>
+      Now connect this device to the same network and paste the IP into your browser
+    </div>
+    ` : `
+    <div>
+      View the Pico's website
+    </div>
+    <button style="width:100%" onclick="confirm_and_copy_ip(event)">copy ${ip}</button>
+    `}`
+    errorL.textContent = ''
+    await Promise.resolve()
+
+    networksL = Q('#networks')
+    keyL = Q('#password')
+
+    const renderNetwork = x => {
+      const selected = x.ssid === network_ssid && !ip
+      const strength = 1 - (Number(x.RSSI) / -120)
+      return `
+      <button class='network' style="width:15em;display:${network_ssid && x.ssid !== network_ssid ? 'none' : 'flex'}">
+        <span style='flex-shrink:1'>${x.ssid}&nbsp;</span>
+        <span style='flex-grow:1'></span>
+        <svg height='1em' width='1.5em' viewBox='0 0 1 1'>
+          <path ${selected ? `fill='#0003'` : `fill='var(--accent)' opacity='.33'`} d='
+          M 0 1
+          L 1.5 0
+          L 1.5 1
+          L 0 1
+          '/>
+          <path ${selected ? `fill='#000'` : `fill='var(--accent)'`} d='
+          M 0 1
+          L ${1.5 * strength} ${1 - strength}
+          L ${1.5 * strength} 1
+          L 0 1
+          '/>
+        </svg>
+      </button>`
+    }
+    if (!networks) {
+      networksL.outerHTML = 'LOADING'
+    } else if (!ip) {
+      networksL.outerHTML = networks.map(renderNetwork).join('\n')
+      await Promise.resolve()
+
+      QQ('.network').map((x, i) => x.addEventListener('click', e => {
+        network_ssid = network_ssid !== networks[i].ssid ? networks[i].ssid : false
+        render()
+        if (network_ssid) {
+          const ssid_password_key = keySave(network_ssid)
+          get({ [ssid_password_key]: true }).then((result) => {
+            if (result?.data) {
+              const existing = result.data[ssid_password_key]
+              if (existing !== true) {
+                keyL.value = existing
+                knownPasswords[ssid_password_key] = existing
+                Q('#connect-button').classList.add('active')
+              }
+            }
+            keyL.click()
+          })
+        }
+      }))
+      keyL.addEventListener('keypress', e => Q('#connect-button').classList.add('active'))
+    } else {
+      networksL.outerHTML = networks.filter(x => x.ssid === network_ssid).map(renderNetwork).join('\n')
+    }
+    QQ('.empty-hide').map(x => x.style.display = network_ssid ? '' : 'none')
+    Q('#networks .selected')?.scrollIntoView({ block: 'center' })
+  }
+  render()
+  setTimeout(async () => {
+    const status = await api('network-status')
+    if (status.ip && status.ssid) {
+      ip = status.ip
+      network_ssid = status.ssid
+      render()
+    }
+  })
+
+  if (!location.host) {
+    api = async (x, y) => {
+      await new Promise(res => setTimeout(res, 250))
+      switch (x) {
+        case 'networks': return `30 a wifi network,37 hello world,50 definitely not wifi,59 test test,59 foo bar baz,60 #6,64 #7,67 #8,72 #9,86 #10`.split(',').map(x=>x.trim()).filter(x=>x).map(x => {
+            const [RSSI, ...ssid] = x.split(' ')
+            return { ssid: ssid.join(' '), RSSI: -RSSI }
+          })
+        case 'network-connect': case 'network-status': return { ip: `192.168.0.16` }
+      }
+    }
+    const store = { data: {} }
+    get = data => Promise.resolve(store.data)
+    set = data => {
+      Object.assign(store, data)
+      return Promise.resolve()
+    }
+  }
+</script>

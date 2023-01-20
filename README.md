@@ -25,7 +25,7 @@ led.on() # turn on LED if app was initialized successfully
 app.run() # listen for requests
 ```
 
-`750KB` supported app weight (`2MB` Pico W flash storage - MicroPython (`1.15MB`) - pico-fi (`< 100KB`))
+Weighs less than `100K` (`64K` when minified), supporting apps up to `750K` (`2M` Pico W flash storage - MicroPython (`1.15M`) - pico-fi (`100K`))
 
 ### Features
 1. A captive portal which connects the Pico to a wireless network
@@ -82,3 +82,7 @@ Notes:
   ```  
   In my experience with iOS, if something goes wrong while trying to connect, this might be necessary to reset the wireless network  
   But try opening the capture portal (`http://192.128.4.1/portal`) in a web browser first
+
+### Options
+1. Replace `src/public/portal.html` with `basic/portal.html` for plain styles
+1. Use `min/` instead of `src/` to create apps up to `800K` in size (instead of `750k`)
