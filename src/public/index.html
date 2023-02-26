@@ -13,12 +13,41 @@
       font-family: system-ui;
     }
   </style>
+  <script>
+    const _persist = (method, data) =>
+      fetch(`/${method}?data=${encodeURIComponent(JSON.stringify(data))}`)
+      .then(x => {
+        console.debug(x)
+        return x
+      })
+      .then(res => res.json())
+      .then(x => {
+        console.debug(x)
+        return x
+      })
+      .then(({ data }) => data) 
+    
+    const get = data => _persist('get', data)
+    const set = data => _persist('set', data)
+  </script>
 </head>
 <body>
 
   <img src="/icon.png" style="image-rendering:pixelated; width:7em" />
   
   <p style="position:absolute; bottom:0; padding: 1em">
+    This page has been viewed <span id="views"></span> times
+    <script>
+      const viewCount = document.querySelector('#views')
+      viewCount.textContent = localStorage.getItem('views') || 0
+      get({ views: true }).then(({ views }) => {
+        views += 1
+        set({ views })
+        viewCount.textContent = views
+        localStorage.setItem('views', views)
+      })
+    </script>
+    <br/><br/>
     Edit <b>src/public/index.html</b> or <b>src/main.py</b> to serve content from the Pico W (&lt; 750KB total)
     <br/><br/>
     [ <a style="color:#ff8686" href="/portal">back to network selection</a> ]

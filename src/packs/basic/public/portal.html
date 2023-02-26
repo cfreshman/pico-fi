@@ -1,9 +1,11 @@
-<meta name="viewport" content="width=device-width,initial-scale=1"><meta charset="utf-8">
+<html><head>
+  <meta name="viewport" content="width=device-width,initial-scale=1"><meta charset="utf-8">
 <style>*{font-size:1em;font-family:system-ui}html,body{height:100%;width:100%;margin:0}body,#root{display:flex;flex-direction:column;align-items:center;justify-content:center}body>*{margin-bottom:1em}#root>*{margin-bottom:.5em;min-width:15em;display:flex;justify-content:center}</style>
+</head><body>
 
 <div id="root"></div>
-<div id="error"></div>
 <button onclick="location.reload()">reload</button>
+<div id="error"></div>
 
 <script>
   const Q = (L, q=undefined) => (q ? L : document.body).querySelector(q || L)
@@ -111,7 +113,7 @@
     const url = get_reference_url()
     rootL.innerHTML = `
     <div>
-      ${ip ? `Pico W connected with IP ${ip}` : `Connect ${name} to your wireless network`}
+      ${ip ? `Pico W connected as&nbsp;<a href="http://${ip}">${ip}</a>` : `Connect ${name} to your wireless network`}
     </div>
     <div id="networks"></div>
     ${!ip
@@ -126,13 +128,15 @@
       ">back</button>&nbsp;`}
       <button id="connect-button" onclick="connect(event)" ${ip ? 'style="margin:auto"' : ''}>${ip ? 'disconnect' : 'connect'}</button>
     </div>
-    ${ip ? `<br/><br/>` : ''}
+    ${false && ip ? `<br/><br/>` : ''}
+    ${location.host === ip ? `<br/><br/>` : ''}
     ${!ip
     ? ''
     : location.host === ip
-    ? `
-    <a style="width:100%" href="http://${ip}">open Pico website</span>
-    `
+    ? ''
+    // ? `
+    // <a style="width:100%" href="http://${ip}">open Pico website</span>
+    // `
     : copied
     ? `
     <div>
@@ -233,3 +237,4 @@
     }
   }
 </script>
+</body></html>

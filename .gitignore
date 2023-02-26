@@ -1,0 +1,7 @@
+build/out/
+build/min/
+build/save/
+**/*.zip
+
+.DS_STORE
+__pycache__/

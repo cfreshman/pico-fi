@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>pico-remote-repl</title>
+  <link rel="icon" href="/icon.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box }
+    html, body {
+      margin: 0;
+      height: 100%;
+      font-family: system-ui;
+      display: flex; flex-direction: column;
+    }
+    body {
+      padding: .5em;
+    }
+    button, label {
+      display: inline-flex;
+      align-items: center;
+      font-size: .8em;
+      cursor: pointer;
+      user-select: none;
+    }
+    *:is(button, label) input[type=checkbox] {
+      margin: 0;
+    }
+
+    @keyframes loader { to { transform: rotate(360deg) } }
+    .loader, .loader::before {
+      display: inline-block;
+      box-sizing: border-box;
+      width: .625em; height: .625em;
+      border: .2em solid transparent;
+      border-radius: 50%;
+      font-size: 1em;
+    }
+    .loader {
+      border-left-color: currentcolor;
+      animation: loader 1.5s infinite linear;
+      display: inline-flex;
+      align-items: center; justify-content: center;
+    }
+    .loader::before {
+      content: "";
+      position: absolute;
+      border-color: currentcolor;
+      opacity: .125;
+    }
+  </style>
+  <script>
+    const Q = (L, q=undefined) => (q ? L : document.body).querySelector(q || L)
+    const QQ = (L, q=undefined) => Array.from((q ? L : document.body).querySelectorAll(q || L))
+
+    const _node = document.createElement('div')
+    const node = html => {
+      _node.innerHTML = html
+      return _node.children[0]
+    }
+  </script>
+</head>
+<body>
+
+  <div style="position:relative">
+    <b>pico-remote-repl</b>&nbsp;&nbsp;<i>run MicroPython remotely</i> 
+    <span style="float:right;font-size:.85em">[ <a style="color:#ff8686" href="/portal">back to network selection</a> ]</span>
+  </div>
+
+  <div
+  style="
+  font-family: monospace;
+  flex-grow: 1;
+  position: relative;
+  /* font-weight: bold; */
+  font-size: 1.2em;
+  border: 1px solid black;
+  border-radius: 2px;
+  margin: .1em 0;
+  ">
+    <textarea
+    id="input"
+    class="hljs language-python"
+    style="
+    width: 100%; height: 100%;
+    font-size: 1em;
+    padding: .25em;
+    border: 0;
+    color: transparent;
+    caret-color: black;
+    outline: none;
+    white-space: pre-wrap; word-break: break-all;
+    "
+    onkeydown="
+    if (event.key === 'Enter') {
+      if (event.shiftKey) {
+        event.preventDefault()
+        localStorage.setItem(VALUE_KEY, input.value)
+        command(input.value)
+        return
+      }
+  
+      const cursor = event.target.selectionStart
+      let start = cursor
+      let text = event.target.value
+      while (start && text[start] !== '\n') start -= 1
+      const line = text.slice(start, cursor)
+      if (line.trim()) {
+        event.preventDefault()
+        const indentMatch = /^\s*/.exec(line)
+        const colonMatch = /:\s*$/.exec(line)
+        const indent = (indentMatch[0] || '\n') + (colonMatch ? '  ' : '')
+        text = text.slice(0, cursor) + indent + text.slice(cursor)
+        setInputValue(text)
+        event.target.selectionStart = event.target.selectionEnd = cursor + indent.length
+      }
+    } else if (event.key === 'Tab' && !event.metaKey) {
+      event.preventDefault()
+      const L = event.target
+      const text = L.value
+      // indent from start of each selected line
+      let start = L.selectionStart, end = L.selectionEnd
+      const untab = event.shiftKey
+      let i = Math.max(0, start - 1)
+      while (i && text[i] !== '\n') i -= 1
+      start = text[i] === '\n' ? i + 1 : i
+      let indented = text.slice(0, i)
+      for (; i <= L.selectionEnd; i++) {
+        if (!i) {
+          if (untab) for (let j = 0; j < 2 && text[i] === ' '; i++, j++) {}
+          else indented += '  '
+        }
+        if (text[i]) indented += text[i]
+        if (text[i] === '\n') {
+          i += 1
+          if (untab) for (let j = 0; j < 2 && text[i] === ' '; i++, j++) {}
+          else indented += '  '
+          i -= 1
+        }
+      }
+      indented += text.slice(i)
+      setInputValue(indented)
+      L.selectionEnd = Math.max(start, end + (indented.length - text.length))
+      L.selectionStart = start === end ? L.selectionEnd : start
+    }
+    "
+    onchange="
+    setInputValue(event.target.value)
+    "
+    oninput="
+    setInputValue(event.target.value)
+    "></textarea>
+    <pre
+    id="input-display"
+    class="language-python"
+    style="
+    white-space: pre-wrap; word-break: break-all;
+    overflow: auto;
+    font-family: monospace;
+    flex-grow: 1;
+    position: relative;
+    pointer-events: none;
+    position: absolute;
+    top: 0; height: 100%; width: 100%;
+    margin: 0;
+    background: none;
+    font-size: 1em;
+    padding: .25em;
+    border: 0;
+    "><code></code></pre>
+    <link id="syntax-highlighting" rel="stylesheet" href="">
+    <!-- https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/default.min.css -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/python.min.js"></script>
+  </div>
+  <div style="position:relative">
+    <div id="commands" style="margin-right:.33em">
+      <button onclick="command(input.value)">run</button>
+      <button onclick="setInputValue('')">clear</button>
+      <button onclick="
+      if (run_history_index > 0) {
+        run_history_index -= 1
+      }
+      setInputValue(run_history[run_history_index])
+      ">previous</button>
+      <button onclick="
+      if (run_history_index < run_history.length - 1) {
+        run_history_index += 1
+      }
+      setInputValue(run_history[run_history_index])
+      ">next</button>
+      <button onclick="
+      const file_input = node(`<input type='file' accept='.py, .txt, .'/>`)
+      file_input.click()
+      file_input.onchange = e => {
+        if (e.target.files.length) {
+          reader = new FileReader()
+          reader.onload = e => {
+            const value = e.target.result
+            console.debug('IMPORT', value)
+            setInputValue(value)
+          }
+          reader.readAsText(e.target.files[0])
+        }
+      }
+      ">import</button>
+      <button onclick="
+      const download = document.createElement('a')
+      download.setAttribute('href',
+        'data:text/plain;charset=utf-8,' + encodeURIComponent(input.value.replace(/\n?$/, '\n')))
+      download.setAttribute('download', `pico-remote-repl-${Math.floor(Date.now() / 1000)}.py`)
+      download.style.display = 'none'
+      document.body.appendChild(download)
+      download.click()
+      document.body.removeChild(download)
+      ">export</button>
+    </div>
+    <!-- <button onclick="
+    fetch('/repl/?token=')
+    ">authorize</button> -->
+    <span id="saved" style="font-size:.7em"></span>
+    <div style="float:right">
+      <label>
+        wrap&nbsp;<input
+        type="checkbox"
+        checked="true"
+        onchange="
+        output.style.whiteSpace = event.target.checked ? 'pre-wrap' : 'pre'
+        " />
+      </label>
+      &nbsp;&nbsp;
+      <select id="select-theme" style="width:6.5em"
+      onchange="
+      setTheme(event.target.value)
+      ">
+        <option value="">no theme</option>
+        <option value="arduino-light">arduino-light</option>
+        <option value="tender">tender</option>
+        <option value="tomorrow">tomorrow</option>
+        <option value="base16/zenburn">base16/zenburn</option>
+      </select>
+    </div>
+  </div>
+  <div
+  id="output"
+  style="
+  background: black; color: white;
+  border: 0;
+  font-family: monospace;
+  white-space: pre-wrap;
+  height: 0;
+  flex-grow: 1;
+  padding: .25em;
+  padding-bottom: 0;
+  margin-top: .25em;
+  display: flex; flex-direction: column;
+  overflow: auto;
+  line-height: 1.1em;
+  ">
+    <p
+    tabindex="0"
+    onclick="
+    output_input.focus()
+    "
+    style="
+    margin: 0;
+    font-size: 1em;
+    line-height: inherit;
+    "></p>
+    <textarea
+    style="
+    -webkit-appearance: none;
+    background: inherit; color: inherit; border: 0;
+    flex-grow: 1;
+    outline: 0;
+    padding: 0;
+    padding-bottom: .5em;
+    min-height: 1em;
+    font-size: 1em;
+    line-height: inherit;
+    "
+    onfocus="
+    event.target.selectionStart = event.target.value.length
+    "
+    oninput="
+    event.target.value = event.target.value
+      .split('\n')
+      .map((x,i) => ((i ? '| ' : '$ ')+x).replace(/^([$|] )+/, '$1'))
+      .join('\n')
+    event.target.style.minHeight = `${event.target.value.split('\n').length * 1.1 + .5}em`
+    setTimeout(() => output.scrollTop = output.scrollHeight)
+    "
+    onkeydown="
+    let start = event.target.selectionStart
+    for (let i = 0; i < 3; i++, start--) {
+      if (start <= 0) {
+        event.target.selectionStart = 2
+        if (event.key === 'Backspace') {
+          if (event.target.selectionEnd === event.target.selectionStart) {
+            return event.preventDefault()
+          }
+        }
+        break
+      }
+      if (event.target.value[start - 1] === '\n') {
+        if (event.key === 'Backspace') {
+          event.target.selectionStart = start - 1
+        } else {
+          event.target.selectionStart = start + 2
+        }
+        break
+      }
+    }
+
+    const value = history[history_index] = event.target.value
+      .split('\n')
+      .map(x => x.replace(/^([$|] )+/, ''))
+      .join('\n')
+    if (event.key === 'Enter') {
+      if (event.shiftKey) {
+        const cursor = event.target.selectionStart
+        let start = cursor
+        
+        let text = value
+        while (start && text[start] !== '\n') start -= 1
+        const line = text.slice(start + 1, cursor).replace(/^\| /, '')
+        if (line.trim()) {
+          event.preventDefault()
+          const indentMatch = /^\s*/.exec(line)
+          const colonMatch = /:\s*$/.exec(line)
+          const indent = '\n| ' + (indentMatch[0] || '') + (colonMatch ? '  ' : '')
+          text = text.slice(0, cursor) + indent + text.slice(cursor)
+          event.target.value = text
+          event.target.selectionStart = cursor + indent.length
+        }
+      } else {
+        event.preventDefault()
+        log(
+          trim_newlines(value)
+            .split('\n')
+            .map((x,i) => ((i ? '| ' : '$ ')+x).replace(/^([$|] )+/, '$1'))
+            .join('\n'),
+          waiting=true)
+        logged(`/repl?${new URLSearchParams({
+          command: encodeURIComponent(value)
+        }).toString()}`)
+        history_index = history.length
+        history[history_index - 1] = value
+        history.push('')
+      }
+    } else if (event.key === 'ArrowUp') {
+      if (history_index > 0) {
+        history_index -= 1
+        event.target.value = event.target.value.slice(0, 2) + history[history_index]
+        setTimeout(() => event.target.selectionStart = event.target.value.length)
+      }
+    } else if (event.key === 'ArrowDown') {
+      if (history_index < history.length - 1) {
+        history_index += 1
+        event.target.value = event.target.value.slice(0, 2) + history[history_index]
+        setTimeout(() => event.target.selectionStart = event.target.value.length)
+      }
+    }
+    event.target.style.minHeight = `${event.target.value.split('\n').length * 1.1 + .5}em`
+    setTimeout(() => output.scrollTop = output.scrollHeight)
+
+    "
+    ></textarea>
+  </div>
+  <script>
+    const VALUE_KEY = 'repl-value'
+    const AUTH_KEY = 'repl-auth'
+    const auth = {}
+    const input = document.querySelector('#input')
+    const input_display = document.querySelector('#input-display')
+    const commands = {}
+    document
+      .querySelectorAll('#commands > button')
+      .forEach(x => commands[x.textContent] = x)
+    const run_history = JSON.parse(localStorage.getItem('run-history') || '[]')
+    let run_history_index = JSON.parse(localStorage.getItem('run-history-index') || '0')
+    const setInputValue = value => {
+      input_display.textContent = input.value = value
+      localStorage.setItem(VALUE_KEY, value)
+      Object.values(commands).map(x => x.style.display = '')
+      if (run_history_index >= run_history.length - 1) {
+        commands.next.style.display = 'none'
+      }
+      if (!run_history_index) {
+        commands.previous.style.display = 'none'
+      }
+      const _highlight = () => {
+        window.hljs ? window.hljs.highlightElement(input_display) : setTimeout(_highlight, 1000)
+      }
+      _highlight()
+    }
+    const logs = [{
+      text: 'pico-fi-repl 1.0',
+    }]
+    const output = document.querySelector('#output')
+    const output_text = output.querySelector('p')
+    const output_input = output.querySelector('textarea')
+    const trim_newlines = text => {
+      return text?.replace(/^((\$ )? *\n)+/, '').replace(/((\| )? *\n?)+$/, '')
+    }
+    const log = (item, waiting=false) => {
+      const scrolled = Math.abs((output.scrollTop + output.clientHeight) - output.scrollHeight) < 16
+      item && logs.push(item)
+      if (waiting) logs.push({ html: `<span style="
+      color: #0f8;
+      "><div class="loader"></div> waiting for result from ${board_name || 'Pico W'}</span>`, waiting })
+      else if (logs.find(x => x.waiting)) logs.splice(logs.findIndex(x => x.waiting), 1)
+      const elements = logs
+        .map(x => {
+          if (x instanceof Error || (x?.includes && x.includes('error:'))) {
+            return node(`<div style="color:#f44">${x.toString()}</div>`)
+          } else if (x && (typeof x === 'string' || x.text)) {
+            return trim_newlines(x.text || x) + '\n'
+          } else if (x && x.html) {
+            return node(`<div>${x.html}</div>`)
+          } else if (x && JSON.stringify(x) !== '{}') {
+            return JSON.stringify(x)
+          } else {
+            logs.splice(logs.indexOf(x), 1)
+          }
+        })
+        .filter(x => x)
+      output_text.innerHTML = ''
+      output_text.append(...elements)
+      output_input.value = waiting ? '' : '$ '
+      if (scrolled) output.scrollTop = output.scrollHeight
+    }
+    const action = (name=false, detail=false, expanded=false, waiting=false) => {
+      detail = detail &&
+        trim_newlines(detail)
+        .split('\n')
+        .map((x,i) => ((i ? '| ' : '$ ')+x).replace(/^([$|] )+/, '$1'))
+        .join('\n')
+      const command = detail &&
+        detail
+        .split('\n')
+        .map((x,i) => x.replace(/^([$|] )+/, ''))
+        .join('\n')
+      
+      console.debug('ACTION', { name, detail, expanded, waiting })
+
+      log(!name ? {
+        html: `<span style="color:gold">${
+          auth?.user ? `<span>${auth.user}</span>@` : ''
+        }${
+          board_name ? board_name : '<i>unable to connect</i>'
+        }</span> <span style="color:gray">${new Date().toLocaleTimeString([], { hour12: false })}</span>`
+      } : (expanded ? { html: `<span style="color:#8df">${detail}</span>` } : {
+        action: name || 'empty',
+        html: `${name?'> '+name:''}${detail ? ` [<span style="
+        text-decoration: underline;
+        cursor: pointer;
+        color: #8df;
+        "
+        onclick="
+        event.target.dataset.open = !JSON.parse(event.target.dataset.open || 'false')
+        if (JSON.parse(event.target.dataset.open)) {
+          event.target.textContent = 'hide'
+          event.target.parentNode.querySelector('.extra').style.display = 'unset'
+          event.target.parentNode.querySelector('.show').style.display = 'unset'
+        } else {
+          event.target.textContent = 'show'
+          event.target.parentNode.querySelector('.extra').style.display = 'none'
+          event.target.parentNode.querySelector('.show').style.display = 'none'
+        }
+        ">show</span><span class="extra" style="display:none">/<span style="
+        text-decoration: underline;
+        cursor: pointer;
+        color: #8df;
+        "
+        onclick="
+        const copy = document.createElement('textarea')
+        document.body.append(copy)
+        copy.value = run_history[${run_history_index - 1}]
+        copy.focus()
+        copy.select()
+        try {
+          document.execCommand('copy')
+          event.target.textContent = 'copied'
+          setTimeout(() => event.target.textContent = 'copy', 5000)
+        } catch {}
+        copy.remove()
+        "
+        >copy</span>/<span style="
+        text-decoration: underline;
+        cursor: pointer;
+        color: #8df;
+        "
+        onclick="
+        command(run_history[${run_history_index - 1}])
+        ">rerun</span></span>]<span class="show" style="cursor:default;color:#8df;display:none">\n${detail}</span>` : ''}`
+      }))
+
+      if (waiting) log(false, waiting)
+    }
+    let i = 0
+    const logged = async (url, force=false) => {
+      console.debug('LOGGED', url)
+      try {
+        return fetch(url)
+        .then(res => res.text())
+        .then(text => {
+          console.debug('REPL RESULT', text)
+          // always parse board.py contents for new name
+          const board_name_match = /name = "([^"]+)"/m.exec(text)
+          if (board_name_match) board_name = board_name_match[1]
+          log(text || { html: `<span style="opacity:.5">(no output)</span>` })
+          return text
+        })
+        .catch(async error => {
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          log(error)
+          return Promise.resolve('')
+        })
+        .finally(() => {
+          action()
+        })
+      } catch (error) {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        log(error)
+        return Promise.resolve('')
+      }
+    }
+    const command = (text, expanded=false, history=true) => {
+      action('run', text, expanded, true)
+      
+      if (history && text !== run_history.slice(-1)[0]) {
+          run_history.push(text)
+        }
+        run_history_index = run_history.length - 1
+        localStorage.setItem('run-history', JSON.stringify(run_history))
+        localStorage.setItem('run-history-index', JSON.stringify(run_history_index))
+      
+      return logged(`/repl?${new URLSearchParams({
+        command: encodeURIComponent(text)
+      }).toString()}`)
+    }
+    
+    setInputValue(localStorage.getItem(VALUE_KEY) ?? 
+`def abc():
+  print(123)
+  
+abc()
+`)
+    const history = []
+    let history_index = 0
+
+    let board_name = undefined
+    command(`
+try:
+  with open('board.py') as f: print(f.read())
+except: print('name = "pyboard"')
+import os
+print(os.uname())`, false, false)
+
+    const theme_select = document.querySelector('#select-theme')
+    const theme_sheet = document.querySelector('#syntax-highlighting')
+    let themeInterval
+    const setTheme = theme => {
+      theme_select.value = theme
+      clearInterval(themeInterval)
+      themeInterval = setInterval(() => {
+        input.style.caretColor = getComputedStyle(input_display).caretColor
+      }, 500)
+      theme_sheet.href = theme && `https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/${theme}.min.css`
+      localStorage.setItem('pico-remote-repl-theme', theme)
+    }
+    setTheme(localStorage.getItem('pico-remote-repl-theme') || '')
+
+    const recursiveThemeFetch = async (path=[]) => {
+      return fetch(`https://api.github.com/repos/highlightjs/highlight.js/contents/src/styles/` + path.join('/'))
+      .then(res => res.json())
+      .then(async list => {
+        const names = []
+        await Promise.allSettled(list
+          .map(x => x.name)
+          .map(async x => {
+            if (x.endsWith('.css')) {
+              names.push([...path, x.replace('.css', '')].join('/'))
+            } else {
+              names.push(...await recursiveThemeFetch([...path, x]))
+            }
+          }))
+        return names
+      })
+    }
+    setTimeout(async () => {
+      let themes
+      try {
+        themes = JSON.parse(localStorage.getItem('pico-remote-repl-theme-list'))
+        if (!themes || !Array.isArray(themes) || !themes.length) throw 'fetch'
+      } catch {
+        themes = await recursiveThemeFetch()
+        localStorage.setItem('pico-remote-repl-theme-list', JSON.stringify(themes))
+      }
+      console.debug({ themes })
+      document.querySelector('#select-theme').innerHTML = `<option value="">no theme</option>` + themes.map(x => `<option value="${x}">${x}</option>`)
+    })
+
+    ;[input, window].map(x => x.addEventListener('keydown', () => {
+      if (event.key === 's' && event.metaKey) {
+        event.preventDefault()
+        localStorage.setItem(VALUE_KEY, input.value)
+        document.querySelector('#saved').textContent = 'saved'
+        setTimeout(() => document.querySelector('#saved').textContent = '', 3000)
+      }
+    }))
+  </script>
+
+</body>
+</html>
