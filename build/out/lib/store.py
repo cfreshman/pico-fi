@@ -38,8 +38,7 @@ class Store:
             log.debug('store write', k, v, k in store and store[k])
 
     def save():
-        f = open('store.json', 'w')
-        f.write(json.dumps(store))
+        with open('store.json', 'w') as f: f.write(json.dumps(store))
         log.debug('saved store', store)
     def load():
         try:
@@ -51,4 +50,5 @@ class Store:
             f.write('')
 
         Store.write(json.loads(f.read() or json.dumps({})))
+        f.close()
         log.debug('loaded store', store)

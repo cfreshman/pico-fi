@@ -167,18 +167,21 @@ class App:
         self.connect()
 
     def connect(self, ssid=None, key=None, wait=True):
-        STORE_NETWORK_KEY = 'network'
+        NETWORK_JSON = 'network.json'
         if not ssid:
-            network = Store.get(STORE_NETWORK_KEY)
-            log.info('stored network login:', network)
-            if not network: return
-            ssid = network['ssid']
-            key = network['key']
+            try:
+                with open(NETWORK_JSON) as f: network = json.loads(f.read())
+                log.info('stored network login:', network)
+                ssid = network['ssid']
+                key = network['key']
+            except:
+                log.info('no stored network login')
+                return
         else:
-            log.info('store network login:', { 'ssid': ssid, 'key': key })
-            Store.write({ STORE_NETWORK_KEY: { 'ssid': ssid, 'key': key } })
-            Store.save()
-
+            network = { 'ssid': ssid, 'key': key }
+            log.info('store network login:', network)
+            with open(NETWORK_JSON, 'w') as f: f.write(json.dumps(network))
+            
         self.sta.active(True)
         self.sta.connect(ssid, key)
         if not wait: return

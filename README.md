@@ -13,7 +13,7 @@ A MicroPython webserver framework for the Pico W with a captive portal for wirel
 
 | Network Login | Landing | `--packs remote-repl` |
 | --- | --- | --- |
-| <img src="https://freshman.dev/api/file/public-pico-fi-portal-1.png" height="500"> | <img src="https://freshman.dev/api/file/public-pico-fi-default-index.png" height="500"> | <img src="https://freshman.dev/api/file/public-pico-remote-repl-mobile.png" height="500"> |
+| ![](https://freshman.dev/api/file/public-pico-fi-portal-1.png) | ![](https://freshman.dev/api/file/public-pico-fi-default-index.png) | ![](https://freshman.dev/api/file/public-pico-remote-repl-mobile.png) |
 
 For example, toggle the on-board LED:
 ```python
@@ -94,10 +94,10 @@ Edit the network name/password in [main.py](./src/main.py), or the HTML in [publ
 * Publish sensor data with MQTT https://www.tomshardware.com/how-to/send-and-receive-data-raspberry-pi-pico-w-mqtt
 
 ### Potential upcoming features
-* WebSocket event handlers
-* Internet access through the Pico directly for connected devices (right now, devices have to reconnect to the base wifi network)
-* Minification step to support app sizes >750K
-* [Create a new request](https://github.com/cfreshman/cfreshman/issues/new/choose)]
+- [ ] WebSocket event handlers
+- [ ] Internet access through the Pico directly for connected devices (right now, devices have to reconnect to the base wifi network)
+- [x] Minification step to support app sizes >750K
+- [ ] [Create a new request](https://github.com/cfreshman/cfreshman/issues/new/choose)
 
 ### Third-party packs
 * (Send me any packs you make and I'll add them here)

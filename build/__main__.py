@@ -14,7 +14,7 @@ python3 build -packs basic --clean --minify --sync --watch
 python3 build -p remote-repl -mcws
 """
 
-import argparse, os, time, re, sys, signal, subprocess
+import argparse, os, time, re, sys, signal, subprocess, json
 
 try:
 
@@ -86,9 +86,12 @@ try:
     help="same as --watch --minify --sync")
   parser.add_argument('-v', '--verbose', action='store_true', 
     help="show additional output (rshell commands)")
+  parser.add_argument('-n', '--network',
+    help='wireless network as name:password')
+  parser.add_argument('PACKS')
 
   args = parser.parse_args()
-  packs = []
+  packs = (args.PACKS or '').split(',')
   for pack in args.packs or []: packs.extend(pack.split(','))
   args.packs = packs
   if args.auto:
@@ -136,6 +139,7 @@ try:
         """)
         rshell(f'cp /{args.sync}/board.py build/save/')
         rshell(f'cp /{args.sync}/store.json build/save/')
+        rshell(f'cp /{args.sync}/network.json build/save/')
         rshell(f'rm -rf /{args.sync}')
         rshell(f'cp build/save/* /{args.sync}')
 
@@ -187,6 +191,7 @@ try:
         print('\nMinify out/ -> min/')
         time.sleep(3)
         indent('python3 build/minify.py')
+        sync_dir = 'build/min'
       
       # Sync build to board
       class WatchInterrupt(Exception): pass
@@ -194,11 +199,17 @@ try:
         repl_pid = process = None
         if args.sync:
           print(f'\nSyncing to {args.sync}')
+          if args.network:
+            ssid, key = args.network.split(':', maxsplit=1)
+            print('Writing network credentials:', ssid, key)
+            with open(f'{sync_dir}/network.json', 'w') as f:
+              f.write(json.dumps({ 'ssid': ssid, 'key': key }))
           time.sleep(3)
           result = rshell(f'ls /{args.sync}')
           if 'Cannot access' in result:
             print(f"Couldn't find {args.sync}")
             sys.exit(0)
+
           rshell(f'rsync {sync_dir} /{args.sync}', 30)
           if args.watch:
             # fork process to open rshell console & watch files at the same time
