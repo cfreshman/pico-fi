@@ -10,25 +10,26 @@ A MicroPython webserver framework for the Pico W with a captive portal for wirel
 > cd pico-fi && python3 build -a --packs remote-repl
 > ```
 > Then connect to `w-pico` (password: `pico1234`)  
+> See [packs/remote-repl](./src/packs/remote-repl/) for examples
 
-| Network Login | Landing | `--packs remote-repl` |
-| --- | --- | --- |
-| ![](https://freshman.dev/api/file/public-pico-fi-portal-1.png) | ![](https://freshman.dev/api/file/public-pico-fi-default-index.png) | ![](https://freshman.dev/api/file/public-pico-remote-repl-mobile.png) |
+Network Login | Landing | `--packs remote-repl`
+--- | --- | ---
+![](https://freshman.dev/api/file/public-pico-fi-portal-1.png) | ![](https://freshman.dev/api/file/public-pico-fi-default-index.png) | ![](https://freshman.dev/api/file/public-pico-remote-repl-mobile.png)
 
-For example, toggle the on-board LED:
+##### For example, toggle the on-board LED:
 ```python
 from machine import Pin
 import pico_fi
 
-# Connect to this wireless network with your phone
+# Connect to the Pico W's network:
+# (on-board LED will be on if started successfully)
 app = pico_fi.App(id='w-pico', password='pico1234')
-
-# On-board LED will turn on if app started successfully
 led = Pin('LED', Pin.OUT)
 @app.started
 def started(): led.on() 
 
-# Toggle the LED through webpage
+# Wait for the login screen to appear
+# Once logged in, you'll see a button to toggle the LED
 @app.route('/led')
 def toggle_led(req, res): led.toggle()
 @app.route('/')
@@ -37,7 +38,7 @@ def index(req, res): res.html("""<button onclick="fetch(`/led`)" style="font-siz
 app.run()
 ```
 
-Weighs `76K` - `156K` depending on configuration, supporting apps up to `774K`  
+Weighs `76K` - `156K` depending on configuration, supporting minified apps up to `774K`  
 (`2000K` Pico W flash storage - MicroPython (`1150K`) - pico-fi (`76K`))
 
 
@@ -67,7 +68,7 @@ Hardware
 Software
 1. [MicroPython](https://www.raspberrypi.com/documentation/microcontrollers/micropython.html#drag-and-drop-micropython)
 1. [rshell](https://github.com/dhylands/rshell)
-> Alternatively, make edits and upload to the [pico-repo.com](https://pico-repo.com) how-to for a drag-n-drop .uf2  
+> Alternatively, make edits and upload to [pico-repo.com/#how-to](https://pico-repo.com/#how-to) for a drag-n-drop .uf2  
 > Then skip to `Connect to the internet`
 
 
@@ -82,12 +83,12 @@ Software
    python3 build --auto
    ```
    This will automatically start pico-fi on your Pico  
-   **See [build](./build/__main__.py) for options** or run `python3 build -h`
+> **See [build](./build/__main__.py) for options** or run `python3 build -h`
 
 ### Connect to the internet
-You should see a new `w-pico` wireless network appear (password: `pico1234`). Connect to this network with your computer or smartphone. If the portal doesn't open automatically, try opening an arbitrary website or http://192.128.4.1/portal. **Expect this to take up to a minute** - the Pico is doing its best.
+You should see a new `w-pico` wireless network appear (password: `pico1234`). Connect to this network with your computer or smartphone. If the portal doesn't open automatically, try opening http://192.128.4.1/portal. **Expect this to take up to a minute** - the Pico is doing its best.
 
-Edit the network name/password in [main.py](./src/main.py), or the HTML in [public/index.html](./src/public/index.html)
+Edit the network name/password or add functionality in [main.py](./src/main.py), HTML in [public/index.html](./src/public/index.html)
 
 ### Looking for project ideas?
 * A multiplayer chess/checkers app anyone in the area can connect to
@@ -95,6 +96,7 @@ Edit the network name/password in [main.py](./src/main.py), or the HTML in [publ
 
 ### Potential upcoming features
 - [ ] WebSocket event handlers
+  - [ ] remote-repl logs in real-time
 - [ ] Internet access through the Pico directly for connected devices (right now, devices have to reconnect to the base wifi network)
 - [x] Minification step to support app sizes >750K
 - [ ] [Create a new request](https://github.com/cfreshman/cfreshman/issues/new/choose)

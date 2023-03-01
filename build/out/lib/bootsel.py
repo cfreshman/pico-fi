@@ -16,7 +16,6 @@ Usage:
   bootsel.read_bootsel() # raw value (0 - pressed, 1 - unpressed)
   bootsel.pressed() # boolean (True - pressed, False - unpressed)
 """
-
 def pressed():
   return not read_bootsel()
 

@@ -90,9 +90,9 @@ class App:
                     log.error(e)
             log.info('configured routes:', *self.routes.keys())
         except Exception as e:
-            log.error(e)
+            log.exception(e)
 
-    def route(self, path):
+    def route(self, path: str or bytes):
         """
         decorator for HTTP requests
 
@@ -147,7 +147,7 @@ class App:
         open('board.py', 'w').write(f'name = "{self.id}"')
         Store.write({ STORE_ID_KEY: self.id })
         self.ap.active(True)
-        self.indicator.on()
+        self.indicator and self.indicator.on()
         log.info('access point:', self.ap.config('essid'), self.ap.ifconfig())
 
         # scan for other networks
@@ -199,6 +199,7 @@ class App:
             self.sta_ip = self.sta.ifconfig()[0]
             self.ip_sink.set(False)
             log.info(f'network connected with ip', self.sta_ip)
+            log.info(f'OPEN http://{self.sta_ip} TO ACCESS PICO W')
             while self.effects['connect']: self.effects['connect'].pop(0)()
         else:
             log.info('network connect failed')
@@ -206,7 +207,7 @@ class App:
 
     def stop(self):
         cmt('stop pico-fi')
-        self.indicator.off()
+        self.indicator and self.indicator.off()
         self.ap.active(False)
         self.sta.active(False)
         for server in self.servers: server.stop()
@@ -311,7 +312,7 @@ class App:
                 # gc between socket events or once per minute
                 gc.collect()
                 for response in self.poller.ipoll(60_000):
-                    self.indicator.pulse()
+                    self.indicator and self.indicator.pulse()
                     self.orch.handle(*response)
 
                 # write store to file at most once per minute

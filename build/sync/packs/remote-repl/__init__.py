@@ -72,5 +72,6 @@ def configure(app):
         outputs.append(f'added routes: {" ".join(x.decode() for x in added)}')
       res.text(''.join(outputs))
     except Exception as e:
-      log.exception(e)
-      res.text('error: ' + repr(e))
+      result = repr(e)
+      log.error(e)
+      res.text('error: ' + result)

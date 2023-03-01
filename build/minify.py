@@ -110,9 +110,10 @@ def minify():
   print('\nMinify python?', bool(python_minifier))
   if not python_minifier:
     print('To support minification of python files: "pip3 install python_minifier"')
+  unminified = { 'bootsel.py', }
   for src_path in [x for x in script_paths if x not in lib_scripts]:
     contents = ''.join(script_contents[src_path])
-    if python_minifier:
+    if python_minifier and not src_path.split('/')[-1] in unminified:
       print(_formatBuildFile(src_path))
       contents = python_minifier.minify(contents)
     min_path = src_path.replace('out', 'min')

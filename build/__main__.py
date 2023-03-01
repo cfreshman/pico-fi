@@ -88,11 +88,14 @@ try:
     help="show additional output (rshell commands)")
   parser.add_argument('-n', '--network',
     help='wireless network as name:password')
-  parser.add_argument('PACKS')
+  parser.add_argument('--no-wait', action='store_true',
+    help='skip waits between commands')
+  parser.add_argument('PACKS', nargs='*')
 
   args = parser.parse_args()
-  packs = (args.PACKS or '').split(',')
-  for pack in args.packs or []: packs.extend(pack.split(','))
+  packs = []
+  for pack in (args.packs or []) + (args.PACKS or []):
+    packs.extend(pack.split(','))
   args.packs = packs
   if args.auto:
     args.watch = args.minify = True
@@ -114,6 +117,7 @@ try:
     elif args.sync not in board_names: 
       print(f"Couldn't find board \"{args.sync}\"")
       sys.exit(0)
+  wait = lambda: 0 if args.no_wait else time.sleep(3)
     
   print(args)
 
@@ -133,7 +137,7 @@ try:
       os.system('rm -rf build/out && rm -rf build/min')
       if args.sync and args.clean:
         print("\nCleaning existing files from Pico")
-        time.sleep(3) # give user 3s to stop if not intentional
+        wait()
         os.system(f"""
         mkdir -p build/save
         """)
@@ -189,7 +193,7 @@ try:
       sync_dir = 'build/out'
       if args.minify:
         print('\nMinify out/ -> min/')
-        time.sleep(3)
+        wait()
         indent('python3 build/minify.py')
         sync_dir = 'build/min'
       
@@ -204,27 +208,42 @@ try:
             print('Writing network credentials:', ssid, key)
             with open(f'{sync_dir}/network.json', 'w') as f:
               f.write(json.dumps({ 'ssid': ssid, 'key': key }))
-          time.sleep(3)
+          wait()
           result = rshell(f'ls /{args.sync}')
           if 'Cannot access' in result:
             print(f"Couldn't find {args.sync}")
             sys.exit(0)
+          
+          # Only sync changed files
+          os.system(f'mkdir -p build/sync')
+          diff_output = os.popen(f'diff -q {sync_dir} build/sync').read()
+          updated = []
+          restart = True # False
+          for line in diff_output.split('\n'):
+            # parse file names after 'Only in' or 'Files'
+            filepath = None
+            if f'Only in {sync_dir}' in line:
+              filepath = os.path.join(sync_dir, line.split(' ')[-1])
+            if 'Files' in line and 'differ' in line:
+              filepath = line.replace('Files ', '').split(' ')[0]
 
-          rshell(f'rsync {sync_dir} /{args.sync}', 30)
+            if filepath:
+              updated.append(filepath)
+              # only restart if files outside public/ changed
+              if not 'public/' in filepath: restart = True
+          print('Updated files:\n', '\n'.join(updated))
+          os.system('\n'.join(
+            f'cp -rf {x} {x.replace(sync_dir, "build/sync")}' for x in updated))
+
+          rshell(f'rsync build/sync /{args.sync}', 60)
+          process = subprocess.Popen(
+            ('rshell', 'repl ~ machine.soft_reset()' if restart else 'repl'),
+            stderr=None)
           if args.watch:
             # fork process to open rshell console & watch files at the same time
-            process = subprocess.Popen(
-              ('rshell', 'repl ~ machine.soft_reset()'),
-              stderr=None)
-            pid = os.fork()
-            if pid: repl_pid = pid
-            else:
-              process.communicate()
-              sys.exit(0)
-          else:
-            os.system('rshell "repl ~ machine.soft_reset()"')
-
-        if not args.watch: break
+            repl_pid = os.fork()
+          if not repl_pid: process.communicate()
+        if not repl_pid: sys.exit(0)
 
         # Watch 'src' and 'packs' for file changes
         print(f'\nWatching for changes')

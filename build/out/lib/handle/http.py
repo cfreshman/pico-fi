@@ -192,8 +192,8 @@ class HTTP(Server):
         if route:
             if isinstance(route, bytes): res.file(route)
             elif callable(route):
-                route(req, res)
-                if not res.sent: res.ok()
+                result = route(req, res)
+                if not res.sent: res.ok() if result is None else res.ok(result)
             else: res.send(HTTP.Response.Status.NOT_FOUND)
 
         # redirect non-matches to landing switch

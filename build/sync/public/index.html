@@ -49,18 +49,6 @@
       opacity: .125;
     }
 
-    #input, #input-display {
-      display: block;
-      width: 100%; height: 100%;
-      flex-grow: 1;
-      margin: 0;
-      border: 0;
-      padding: .25em;
-      font-size: 1em;
-      white-space: pre-wrap; word-break: break-all;
-      overflow: auto;
-      font-family: monospace;
-    }
     #output a {
       color: #8df;
       text-decoration: underline;
@@ -90,19 +78,24 @@
   font-family: monospace;
   flex-grow: 1;
   position: relative;
+  /* font-weight: bold; */
   font-size: 1.2em;
   border: 1px solid black;
   border-radius: 2px;
   margin: .1em 0;
-  display: flex;
   ">
     <textarea
     id="input"
     class="hljs language-python"
     style="
+    width: 100%; height: 100%;
+    font-size: 1em;
+    padding: .25em;
+    border: 0;
     color: transparent;
     caret-color: black;
     outline: none;
+    white-space: pre-wrap; word-break: break-all;
     "
     onkeydown="
     if (event.key === 'Enter') {
@@ -165,11 +158,22 @@
     id="input-display"
     class="language-python"
     style="
+    white-space: pre-wrap; word-break: break-all;
+    overflow: auto;
+    font-family: monospace;
+    flex-grow: 1;
+    position: relative;
     pointer-events: none;
-    position: absolute; top: 0;
+    position: absolute;
+    top: 0; height: 100%; width: 100%;
+    margin: 0;
     background: none;
+    font-size: 1em;
+    padding: .25em;
+    border: 0;
     "><code></code></pre>
     <link id="syntax-highlighting" rel="stylesheet" href="">
+    <!-- https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/default.min.css -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/python.min.js"></script>
   </div>
@@ -383,6 +387,13 @@
     const setInputValue = value => {
       input_display.textContent = input.value = value
       localStorage.setItem(VALUE_KEY, value)
+      Object.values(commands).map(x => x.style.display = '')
+      if (run_history_index >= run_history.length - 1) {
+        commands.next.style.display = 'none'
+      }
+      if (!run_history_index) {
+        commands.previous.style.display = 'none'
+      }
       const _highlight = () => {
         window.hljs ? window.hljs.highlightElement(input_display) : setTimeout(_highlight, 1000)
       }
