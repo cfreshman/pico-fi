@@ -108,7 +108,7 @@ try:
     print('Connected boards:', ''.join(board_names) or None)
     if not board_names:
       print(f"Retrying in 10s")
-      time.sleep(5)
+      time.sleep(10)
       board_names = _read_boards()
       if not board_names:
         print(f"Connect your Pico or run without --sync")
@@ -216,7 +216,7 @@ try:
           
           # Only sync changed files
           os.system(f'mkdir -p build/sync')
-          diff_output = os.popen(f'diff -q {sync_dir} build/sync').read()
+          diff_output = os.popen(f'diff -qr {sync_dir} build/sync').read()
           updated = []
           restart = True # False
           for line in diff_output.split('\n'):
@@ -231,7 +231,7 @@ try:
               updated.append(filepath)
               # only restart if files outside public/ changed
               if not 'public/' in filepath: restart = True
-          print('Updated files:\n', '\n'.join(updated))
+          print('Updated files:\n' + '\n'.join(updated))
           os.system('\n'.join(
             f'cp -rf {x} {x.replace(sync_dir, "build/sync")}' for x in updated))
 

@@ -1,5 +1,6 @@
 build/out/
 build/min/
+build/sync/
 build/save/
 **/*.zip
 

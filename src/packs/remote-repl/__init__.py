@@ -19,11 +19,12 @@ try:
 except: pass
 
 
-def configure(app):
+def configure(app: App):
 
   @app.route('/repl')
   def repl(req: HTTP.Request, res: HTTP.Response):
     global _repl_locals, _tokens, _auth
+    log.info('repl')
     
     outputs = []
     def _print(*a, **k):
@@ -61,16 +62,32 @@ def configure(app):
           with open('user.py', 'w') as f: f.write(f'{user} = "{passhash}"')
         else: os.remove('user.py')
 
-      command = unquote_to_bytes(req.query['command']).decode()
-      log.info('repl\n' + command + '\n')
+      command = unquote_to_bytes(req.query.get('command', '')).decode()
+      run_option = unquote_to_bytes(req.query.get('run_option', '')).decode()
+      log.info(
+        ('run option: '+run_option+'\n' if run_option else '') + 
+        command + '\n')
+      if run_option == 'startup':
+        with open('startup.py', 'w') as f: f.write(command)
       _repl_locals['app'] = app
       routes = set(app.routes.keys())
       exec(command, globals() | { 'print': _print }, _repl_locals)
       added = set(app.routes.keys()) - routes
       if added: 
         print('added routes:', added)
-        outputs.append(f'added routes: {" ".join(x.decode() for x in added)}')
+        outputs.append(
+          f'added routes: {" ".join(x.decode() for x in added)}\n')
       res.text(''.join(outputs))
     except Exception as e:
       log.exception(e)
       res.text('error: ' + repr(e))
+
+  # Run saved script on startup
+  try:
+    with open('startup.py') as f:
+      command = f.read()
+      if command:
+        log.info('remote-repl: startup script')
+        exec(command, globals(), _repl_locals | { 'app': app })
+  except:
+    log.info('remote-repl: no startup script')

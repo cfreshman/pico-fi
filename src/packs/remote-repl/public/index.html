@@ -176,6 +176,13 @@
   <div style="position:relative">
     <div id="commands" style="margin-right:.33em">
       <button onclick="command(input.value)">run</button>
+      <select id="select-run-option" style="width:6.5em"
+      onchange="
+      setRunOption(event.target.value)
+      ">
+        <option value="">once</option>
+        <option value="startup">on startup</option>
+      </select>
       <button onclick="setInputValue('')">clear</button>
       <button onclick="
       if (run_history_index > 0) {
@@ -214,6 +221,7 @@
       download.click()
       document.body.removeChild(download)
       ">export</button>
+      &nbsp;<a href="https://freshman.dev/git:pico-fi-remote-repl" id="readme" style="font-size:.7em" target="_blank" rel="noreferrer">README</a>
     </div>
     <!-- <button onclick="
     fetch('/repl/?token=')
@@ -378,6 +386,14 @@
     document
       .querySelectorAll('#commands > button')
       .forEach(x => commands[x.textContent] = x)
+
+    const run_option_select = document.querySelector('#select-run-option')
+    const setRunOption = run_option => {
+      run_option_select.value = run_option
+      localStorage.setItem('pico-remote-repl-run-option', run_option)
+    }
+    setRunOption(localStorage.getItem('pico-remote-repl-run-option') || '')
+
     const run_history = JSON.parse(localStorage.getItem('run-history') || '[]')
     let run_history_index = JSON.parse(localStorage.getItem('run-history-index') || '0')
     const setInputValue = value => {
@@ -526,14 +542,15 @@
       action('run', text, expanded, true)
       
       if (history && text !== run_history.slice(-1)[0]) {
-          run_history.push(text)
-        }
-        run_history_index = run_history.length - 1
-        localStorage.setItem('run-history', JSON.stringify(run_history))
-        localStorage.setItem('run-history-index', JSON.stringify(run_history_index))
+        run_history.push(text)
+      }
+      run_history_index = run_history.length - 1
+      localStorage.setItem('run-history', JSON.stringify(run_history))
+      localStorage.setItem('run-history-index', JSON.stringify(run_history_index))
       
       return logged(`/repl?${new URLSearchParams({
-        command: encodeURIComponent(text)
+        command: encodeURIComponent(text),
+        run_option: run_option_select.value,
       }).toString()}`)
     }
     
