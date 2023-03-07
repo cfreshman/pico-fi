@@ -101,6 +101,34 @@ try:
     args.watch = args.minify = True
     if not args.sync: args.sync = True
   if args.sync:
+    # Check for board mounted with BOOTSEL
+    rpi_mount_dir = os.popen(f"""
+    echo $( \\
+      [ $(uname) == Darwin ] && echo /Volumes || echo /media/$USER \\
+    )/RPI-RP2
+    """).readline().strip()
+    def _mounted():
+      return 'y' in os.popen(
+        f"[ -d {rpi_mount_dir} ] && echo y || echo ''").read().strip()
+    if _mounted():
+      print(f"Found uninitialized Pico at {rpi_mount_dir}")
+      mp_response = input(
+        "Install MicroPython for Pico W? [Y/n] ") or 'y'
+      if mp_response.lower()[0] == 'y':
+        wait_from = time.time()
+        os.system(f"""
+        curl http://micropython.org/download/rp2-pico-w/rp2-pico-w-latest.uf2 > {rpi_mount_dir}/m.uf2
+        """)
+        print(
+          'MicroPython installed, waiting for Pico to disconnect and restart')
+        for i in range(10): time.sleep(1)
+
+    # Verify rshell is installed
+    if not os.popen('which rshell').read().strip():
+      rshell_response = input(
+        "Unable to find rshell, install it now? [Y/n] ") or 'y'
+      if rshell_response.lower()[0] == 'y': os.system("pip3 install rshell")
+
     def _read_boards():
       result = rshell('boards') or ''
       return [x.split(' @ ')[0] for x in result.split('\n') if '@' in x]
@@ -112,6 +140,7 @@ try:
       board_names = _read_boards()
       if not board_names:
         print(f"Connect your Pico or run without --sync")
+        print(f"If your Pico is already connected, reconnect while holding BOOTSEL and re-run this script to reinstall MicroPython")
         sys.exit(0)
     if args.sync is True: args.sync = board_names[0]
     elif args.sync not in board_names: 
