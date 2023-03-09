@@ -7,7 +7,7 @@ import select
 import socket
 from collections import namedtuple
 import re
-
+import _thread
 import micropython
 
 from lib.handle.ws import WebSocket
@@ -54,7 +54,7 @@ class HTTP(Server):
 
     Request = namedtuple(
         'Request',
-        'host method path raw_query query headers body')
+        'host method path raw_query query headers body socket_id')
     
     class Response:
         class Status:
@@ -107,7 +107,7 @@ class HTTP(Server):
 
         def text(self, content: bytes or str): self.content('txt', content)
         def json(self, data): self.content('json', json.dumps(data))
-        def html(self, content: bytes or str): self.content('test/blah.html', content)
+        def html(self, content: bytes or str): self.content('text/html', content)
 
         def file(self, path: bytes or str):
             log.info('open file for response', path)
@@ -115,6 +115,11 @@ class HTTP(Server):
             except Exception as e:
                 log.exception(e, 'error reading file', path)
                 self.send(HTTP.Response.Status.NOT_FOUND)
+
+        def fork(self, func):
+            self.sent = True
+            _thread.stack_size(8 * 1024)
+            _thread.start_new_thread(func, ())
 
 
     def __init__(self, orch: Orchestrator, ip_sink: IpSink, routes: dict[bytes, bytes or function]):
@@ -125,7 +130,7 @@ class HTTP(Server):
         self.routes = routes
         self.ws_upgrades = set()
 
-        # queue up to 5 connection requestss before refusing
+        # queue up to 5 connection requests before refusing
         self.sock.listen(5)
         self.sock.setblocking(False)
 
@@ -152,12 +157,11 @@ class HTTP(Server):
     def parse_request(self, raw_req: bytes):
         """parse a raw HTTP request"""
 
-        log.info(raw_req)
-        log.flush()
         header_bytes, body_bytes = raw_req.split(HTTP.END)
         header_lines = header_bytes.split(HTTP.NL)
         req_type, full_path, *_ = header_lines[0].split(b' ')
         path, *rest = full_path.split(b'?', 1)
+        log.info('HTTP REQUEST:', b' '.join((req_type, path)).decode())
         raw_query = rest[0] if len(rest) else None
         query = {
             unquote(key): unquote(val)
@@ -168,10 +172,9 @@ class HTTP(Server):
             for key, val in [line.split(b': ', 1) for line in header_lines[1:]]
         }
         host = headers[b'Host']
+        socket_id = headers.get(b'X-Pico-Fi-Socket-Id', None)
 
-        log.info('HTTP REQUEST:', (host + path).decode())
-        log.debug(raw_req.decode().strip())
-        return HTTP.Request(host, req_type, path, raw_query, query, headers, body_bytes)
+        return HTTP.Request(host, req_type, path, raw_query, query, headers, body_bytes, socket_id)
 
     def parse_route(self, req: Request):
         log.info(req.path.split(b'/'))
@@ -216,7 +219,7 @@ class HTTP(Server):
         log.info('HTTP RESPONSE',
             f': body length {len(body) if isinstance(body, bytes) else "unknown"}' if body else '',
             '\n', encode(headers).decode().strip(), sep='')
-        self.tcp.prepare(sock, headers, b'\n', body)
+        self.tcp.prepare(sock, headers, *([b'\n', body] if body else []))
 
     def write(self, sock):
         if self.tcp.write(sock):

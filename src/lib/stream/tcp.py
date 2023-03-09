@@ -59,7 +59,8 @@ class TCP:
         try: bytes_written = sock.write(curr.buffmv[curr.range[0]:curr.range[1]])
         except OSError as e:
             writers.remove(curr)
-            return log.exception(e, 'cannot write to a closed socket')
+            log.exception(e, 'cannot write to a closed socket')
+            return True
 
         log.debug(bytes_written, 'bytes written to', connection.of(sock))
         if bytes_written == curr.range[1] - curr.range[0]:
@@ -67,9 +68,10 @@ class TCP:
             curr.range[0] = 0
             curr.range[1] = curr.data.readinto(curr.buff)
             if curr.range[1] == 0:
-                # out of data, remove writer from list & return True
+                # out of data, remove writer from list
                 writers.remove(curr)
-                return True
+                # return True if all pending writes written
+                if not writers: return True
         else:
             # didn't write entire range, increment start for next write
             curr.range[0] += bytes_written

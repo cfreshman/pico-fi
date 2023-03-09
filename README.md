@@ -63,7 +63,7 @@ Hardware
 1. Pico W
 1. USB to Micro USB data cable
 1. LED _(optional - defaults to on-board LED)_
-> [I've created a starter kit with these items](https://pico-repo/starter)  
+> [I've created a starter kit with these items](https://pico-repo.com/starter)  
 
 Software
 1. [MicroPython](https://www.raspberrypi.com/documentation/microcontrollers/micropython.html#drag-and-drop-micropython)
@@ -74,29 +74,36 @@ Software
 
 ### Install
 
-1. Connect your Pico *with MicroPython installed*
-1. Open your Unix shell *with rshell installed*
+1. Plug in your Pico W with MicroPython installed (if not, plug in while holding BOOTSEL)
 1. Download pico-fi & build
    ```
    git clone https://github.com/cfreshman/pico-fi
    cd pico-fi
    python3 build --auto
    ```
-   This will automatically start pico-fi on your Pico  
+   This will automatically install MicroPython/rshell and start pico-fi on your Pico  
 > **See [build](./build/__main__.py) for options** or run `python3 build -h`
 
-### Connect to the internet
+#### Connect to the internet
 You should see a new `w-pico` wireless network appear (password: `pico1234`). Connect to this network with your computer or smartphone. If the portal doesn't open automatically, try opening http://192.128.4.1/portal. **Expect this to take up to a minute** - the Pico is doing its best.
+
+> Alternatively, specify the network credentials at build time: `python3 build -a -n "network:password"`
+
+### Post-install
 
 Edit the network name/password or add functionality in [main.py](./src/main.py), HTML in [public/index.html](./src/public/index.html)
 
-### Looking for project ideas?
+If your [main.py](./src/main.py) grows too complex, split into separate concerns under [packs/](./src/packs/) and include each in the build: `python3 build -a pack-a,pack-b,pack-c`. Or build without minifying for accurate stack trace line numbers: `python3 build -ws pack-a,pack-b,pack-c`
+
+See [packs/hello-world](./src/packs/remote-repl/__init__.py) for a showcase of pico-fi features
+
+#### Looking for project ideas?
 * A multiplayer chess/checkers app anyone in the area can connect to
 * Publish sensor data with MQTT https://www.tomshardware.com/how-to/send-and-receive-data-raspberry-pi-pico-w-mqtt
 
 ### Potential upcoming features
-- [ ] WebSocket event handlers
-  - [ ] remote-repl logs in real-time
+- [x] WebSocket event handlers
+  - [x] remote-repl logs in real-time
 - [ ] Internet access through the Pico directly for connected devices (right now, devices have to reconnect to the base wifi network)
 - [x] Minification step to support app sizes >750K
 - [ ] [Create a new request](https://github.com/cfreshman/cfreshman/issues/new/choose)

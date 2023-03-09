@@ -14,6 +14,7 @@ import uasyncio
 from lib.handle.dns import DNS
 from lib.handle.http import HTTP
 from lib.handle.ws import WebSocket
+from lib.stream.ws import WS
 from lib import encode, randlower, delimit, LED
 from lib.logging import cmt, log
 from lib.server import Orchestrator, SocketPollHandler, IpSink
@@ -51,6 +52,7 @@ class App:
         )
         self.poller = select.poll()
         self.orch = Orchestrator(self.poller)
+        self.websocket = None
         self.servers: SocketPollHandler = []
         self.routes = {
             b'/portal': b'/public/portal.html',
@@ -59,6 +61,12 @@ class App:
             b'/get': self.get,
             b'/set': self.set,
             b'/api': self.api,
+        }
+        self.events = {
+            b'echo': lambda msg: msg.reply(msg.content),
+            # can define opcode fallback for non-text or non-match:
+            WS.Opcode.TEXT: None,
+            WS.Opcode.BINARY: None,
         }
 
         if indicator and not isinstance(indicator, LED): indicator = LED(indicator, .05)
@@ -84,11 +92,14 @@ class App:
                         log.info('-', *pack_features.keys())
                     if 'routes' in pack_features:
                         self.routes = self.routes | pack_features['routes']
+                    if 'events' in pack_features:
+                        self.events = self.events | pack_features['events']
                     if 'configure' in pack_features:
                         pack_features['configure'](self)
                 except Exception as e:
                     log.error(e)
             log.info('configured routes:', *self.routes.keys())
+            log.info('configured events:', *self.events.keys())
         except Exception as e:
             log.exception(e)
 
@@ -105,6 +116,20 @@ class App:
             def wrapper(*args, **kwargs):
                 handler(*args, **kwargs)
             self.routes[encode(path)] = wrapper
+        return decorator
+
+    def event(self, type: str or bytes or WS.Opcode):
+        """
+        decorator for WebSocket events
+
+        @app.event('foo')
+        def bar(msg):
+            msg.reply('baz')
+        """
+        def decorator(handler):
+            def wrapper(*args, **kwargs):
+                handler(*args, **kwargs)
+            self.events[encode(type)] = wrapper
         return decorator
 
     def started(self, func):
@@ -132,9 +157,10 @@ class App:
     def start(self):
         cmt('start pico-fi')
         Store.load()
+        self.websocket = WebSocket(self.orch, self.events)
         self.servers = [
             DNS(self.orch, self.ap_ip),
-            WebSocket(self.orch),
+            self.websocket,
             HTTP(self.orch, self.ip_sink, self.routes),
         ]
 
@@ -238,7 +264,7 @@ class App:
         data = self._parse_data_from_query(req.query)
         log.info('set', data)
         Store.write(data)
-        res.ok()
+        res.json(data)
         log.debug('updated store', Store.store)
 
     def api(self, req: HTTP.Request, res: HTTP.Response):

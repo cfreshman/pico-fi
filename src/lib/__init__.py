@@ -46,21 +46,29 @@ def chain(value, *funcs):
     return compose(*funcs)(value)
 
 
-def encode(string: str or bytes) -> bytes:
+def encode(input: str or bytes) -> bytes:
     """given string or bytes, return bytes"""
-    return string.encode() if isinstance(string, str) else string
+    return input.encode() if isinstance(input, str) else input
+
+def decode(input: str or bytes) -> str:
+    """given string or bytes, return string"""
+    return input.decode() if isinstance(input, bytes) else input
 
 def encode_bytes(raw: int, n_bytes: int) -> bytes:
     """fill exact length of bytes"""
-    b = b''
-    for i in range(n_bytes): b += bytes(raw >> 8 * (n_bytes - 1 - i))
-    return b
+    b = bytearray()
+    for i in range(n_bytes): b.append(raw >> 8 * (n_bytes - 1 - i))
+    return bytes(b)
 
 def decode_bytes(raw: bytes) -> int:
     """read bytes as integer"""
     x = 0
     for i in range(len(raw)): x = (x << 8) + raw[i]
     return x
+
+def format_bytes(input: bytes or int) -> str:
+    if isinstance(input, int): input = bytes(input)
+    return ' '.join(f'{hex(b)[2:]:>02}' for b in input)
 
 
 def unquote(string: str or bytes) -> str:

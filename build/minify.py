@@ -28,10 +28,11 @@ def minify():
         path = os.path.join(root, file)
         script_paths.append(path)
   
-  print('\nConcatenate:')
-  [print(_formatBuildFile(x)) for x in sorted(lib_scripts)]
-  print('\nUpdate imports:')
-  [print(_formatBuildFile(x)) for x in sorted(script_paths) if x not in lib_scripts]
+  if lib_scripts:
+    print('\nConcatenate:')
+    [print(_formatBuildFile(x)) for x in sorted(lib_scripts)]
+    print('\nUpdate imports:')
+    [print(_formatBuildFile(x)) for x in sorted(script_paths) if x not in lib_scripts]
 
   """
   Read files & order according to imports

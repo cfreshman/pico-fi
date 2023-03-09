@@ -18,11 +18,6 @@ import argparse, os, time, re, sys, signal, subprocess, json
 
 try:
 
-  def flag_or_str_kwargs():
-    return {
-      'nargs': '?', 'const': True, 'default': False,
-    }
-
   module_options = os.listdir('src/packs')
   default_board_name = 'w-pico'
   def kill(pid):
@@ -30,7 +25,7 @@ try:
       os.kill(pid, signal.SIGINT)
       time.sleep(.1)
       os.system(f'kill -9 {pid}')
-  def rshell(command, seconds=5):
+  def rshell(command, seconds=5, no_output=False):
     if args.verbose: print('   ', 'rshell', command)
     r, w = os.pipe()
     process = pid = None
@@ -42,6 +37,7 @@ try:
           import select
           i, o, e = select.select([f], [], [], seconds)
           if i: return f.read()
+          elif no_output: return None
           else: print('rshell command timed out - try reconnecting your Pico')
       else:
         os.close(r)
@@ -78,9 +74,11 @@ try:
     help="reduce app size (50%% on average)")
   parser.add_argument('-w', '--watch', action='store_true',
     help="rebuild when files change")
-  parser.add_argument('-s', '--sync', **flag_or_str_kwargs(),
-    help="sync build to Pico at /<SYNC>, or /w-pico by default, and restart")
-  parser.add_argument('-c', '--clean', action='store_true', 
+  parser.add_argument('-s', '--sync', action='store_true',
+    help="sync build to Pico and restart")
+  parser.add_argument('-b', '--board', action='store',
+    help="specify Pico board for sync if more than one connected")
+  parser.add_argument('-c', '--clean', action='store_true',
     help="WARNING - may result in data loss: clear extra on-board files")
   parser.add_argument('-a', '--auto', action='store_true', 
     help="same as --watch --minify --sync")
@@ -142,8 +140,11 @@ try:
         print(f"Connect your Pico or run without --sync")
         print(f"If your Pico is already connected, reconnect while holding BOOTSEL and re-run this script to reinstall MicroPython")
         sys.exit(0)
-    if args.sync is True: args.sync = board_names[0]
-    elif args.sync not in board_names: 
+    if args.board: args.sync = args.board
+    elif args.sync: args.sync = board_names[0]
+    print(board_names, args.sync)
+
+    if args.sync not in board_names:
       print(f"Couldn't find board \"{args.sync}\"")
       sys.exit(0)
   wait = lambda: 0 if args.no_wait else time.sleep(3)
@@ -175,6 +176,7 @@ try:
         rshell(f'cp /{args.sync}/network.json build/save/')
         rshell(f'rm -rf /{args.sync}')
         rshell(f'cp build/save/* /{args.sync}')
+        os.system('rm -rf build/sync')
 
       # Only copy new files & changes to avoid excessive rsync
       # Copy src/* to out/
@@ -232,16 +234,17 @@ try:
         repl_pid = process = None
         if args.sync:
           print(f'\nSyncing to {args.sync}')
+          result = rshell(f'ls /{args.sync}')
+          if 'Cannot access' in result:
+            print(f"Couldn't find {args.sync}")
+            sys.exit(0)
+          wait()
+
           if args.network:
             ssid, key = args.network.split(':', maxsplit=1)
             print('Writing network credentials:', ssid, key)
             with open(f'{sync_dir}/network.json', 'w') as f:
               f.write(json.dumps({ 'ssid': ssid, 'key': key }))
-          wait()
-          result = rshell(f'ls /{args.sync}')
-          if 'Cannot access' in result:
-            print(f"Couldn't find {args.sync}")
-            sys.exit(0)
           
           # Only sync changed files
           os.system(f'mkdir -p build/sync')
@@ -252,19 +255,33 @@ try:
             # parse file names after 'Only in' or 'Files'
             filepath = None
             if f'Only in {sync_dir}' in line:
-              filepath = os.path.join(sync_dir, line.split(' ')[-1])
+              # Only in <dir>: <name>
+              [only, name] = line.split(': ')
+              dir = only.split(' ')[-1]
+              filepath = os.path.join(dir, name)
             if 'Files' in line and 'differ' in line:
+              # Files <from> and <to> differ
               filepath = line.replace('Files ', '').split(' ')[0]
 
             if filepath:
               updated.append(filepath)
               # only restart if files outside public/ changed
               if not 'public/' in filepath: restart = True
-          print('Updated files:\n' + '\n'.join(updated))
-          os.system('\n'.join(
-            f'cp -rf {x} {x.replace(sync_dir, "build/sync")}' for x in updated))
+          print('Updated files:\n' + '\n'.join(updated or ['(none)']))
+          for filepath in updated:
+            sync_filepath = filepath.replace(sync_dir, 'build/sync')
+            sync_filedir = re.sub(r'/[^/]*$', '', sync_filepath)
+            os.system(f"""
+            mkdir -p {sync_filedir}
+            cp -rf {filepath} {sync_filepath}
+            """)
 
+          print('\nRestarting device')
           rshell(f'rsync build/sync /{args.sync}', 60)
+          if restart: 
+            try: rshell('repl ~ machine.reset() ~', 1, True)
+            except: pass # expected
+          time.sleep(5)
           process = subprocess.Popen(
             ('rshell', 'repl ~ machine.soft_reset()' if restart else 'repl'),
             stderr=None)

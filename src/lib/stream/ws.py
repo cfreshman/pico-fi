@@ -1,8 +1,9 @@
 import io
 import socket
+import select
 
 from lib.stream.tcp import TCP
-from lib import decode_bytes, defaulter_dict, encode_bytes, enum
+from lib import decode_bytes, defaulter_dict, encode, encode_bytes, format_bytes, enum
 from lib.logging import log
 
 
@@ -11,13 +12,18 @@ class enum: pass
 class WS(TCP):
     """
     read & write WebSocket frames
-    write same as TCP, but parse & prepare additional info to
-     signal frames over otherwise continuous connection
+    write same as TCP, but parse & prepare additional info to signal frames
+    over otherwise continuous connection
     """
 
     class FIN:
         NON_FINAL = 0x0
         FINAL = 0x1
+        @staticmethod
+        def name(final):
+            return (
+                [x for x in dir(WS.FIN) if getattr(WS.FIN, x) == final]
+                or [None])[0]
 
     class Opcode:
         CONTINUE = 0x0
@@ -26,6 +32,11 @@ class WS(TCP):
         CLOSE = 0x8
         PING = 0x9
         PONG = 0xA
+        @staticmethod
+        def name(opcode):
+            return (
+                [x for x in dir(WS.Opcode) if getattr(WS.Opcode, x) == opcode]
+                or [None])[0]
 
     class Mask:
         OFF = 0x0
@@ -42,19 +53,21 @@ class WS(TCP):
             self.data = b''
             self.done = False
             self.final = False
+            self.opcode = None
 
         def read(self):
             if self.data: # continue prev read
-                self.data += bytearray(self.sock.read(self.len - len(self.data)))
+                self.data += self.sock.read(self.len - len(self.data))
             else:
-                log.debug('WebSocket frame read')
                 try: bAB = self.sock.recv(2)
                 except: bAB = None
-                log.debug('WebSocket frame header:', bAB)
                 if not bAB: return # no data to read
                 bA = bAB[0]
-                self.final = bA & 0b1000_0000
+                self.final = (bA & 0b1000_0000) > 7
                 self.opcode = bA & 0b0000_1111
+                log.debug(
+                    'WebSocket frame read: header', format_bytes(bAB),
+                    WS.FIN.name(self.final), WS.Opcode.name(self.opcode))
                 bB = bAB[1]
                 self.mask = bB & 0b1000_0000
                 self.len = bB & 0b0111_1111
@@ -62,17 +75,21 @@ class WS(TCP):
                 if self.len == 126: ext = 2
                 if self.len == 127: ext = 8
                 if ext: self.len = decode_bytes(self.sock.recv(ext))
+
                 self.mask = self.sock.recv(4) if self.mask else 0
                 self.data = bytearray(self.sock.read(self.len))
-            log.debug('WebSocket frame read', len(self.data), '/', self.len, 'bytes')
             if len(self.data) == self.len:
                 # read completed, unmask data
                 if self.mask:
                     for i in range(len(self.data)):
                         j = i % 4
                         self.data[i] = self.data[i] ^ self.mask[j]
+                log.debug(
+                    'WebSocket completed frame read:',
+                    WS.Opcode.name(self.opcode), self.data)
                 self.done = True
-                log.debug('completed WebSocket frame read: opcode', hex(self.opcode), 'data', self.data.decode())
+            else:
+                log.debug('WebSocket frame read:', len(self.data), '/', self.len, 'bytes')
 
     class ReadMessage:
         def __init__(self, sock):
@@ -80,10 +97,11 @@ class WS(TCP):
             self.frame: WS.ReadFrame = WS.ReadFrame(sock)
             self.data = b''
             self.done = False
+            self.opcode = None
 
         def read(self):
-            # if self.done: raise Exception('WebSocket message complete')
             self.frame.read()
+            self.opcode = self.opcode or self.frame.opcode
             if self.frame.done:
                 self.data += self.frame.data
                 if self.frame.final:
@@ -91,32 +109,45 @@ class WS(TCP):
                     del self.frame
                 else:
                     self.frame = WS.ReadFrame(self.sock)
-                log.debug('completed WebSocket message:', self.data.decode())
+            elif not self.frame.data: # initial frame empty, end read
+                self.done = True
 
 
     def __init__(self, poller):
         super().__init__(poller)
-        self.messages: dict[int, WS.Message] = defaulter_dict()
+        self.messages: dict[int, WS.ReadMessage] = defaulter_dict()
+    
+    def end(self, sock: socket.socket):
+        del self.messages[id(sock)]
+        super().end(sock)
 
-    def read(self, sock: socket.socket):
+    def read(self, sock: socket.socket) -> tuple(bytes, str or bytes):
         message = self.messages.get(id(sock), lambda x: WS.ReadMessage(sock))
         try: message.read()
         except Exception as e:
             log.exception(e)
-            self.end(sock) # close WebSocket
+            message.opcode = WS.Opcode.CLOSE
+            message.done = True
         if message.done:
-            del self.messages[id(sock)]
-            return message.data
+            if message.opcode == WS.Opcode.CLOSE: self.end(sock)
+            else:
+                del self.messages[id(sock)]
+                self._poller.modify(sock, select.POLLOUT)
+            return [message.opcode, message.data]
 
-    def send(self, sock: socket.socket, opcode: int, message: str or bytes=b''):
+    def send(self,
+        sock: socket.socket, 
+        opcode: int,
+        message: str or bytes=b''):
 
         # construct frame - send in single message
-        header = b''
+        header = bytearray()
+        data = encode(str(message))
 
         FIN_RSV_opcode = WS.FIN.FINAL << 7 | opcode
         header += bytes((FIN_RSV_opcode,))
 
-        payload_len = len(message)
+        payload_len = len(data)
         ext_payload_len = b''
         if payload_len > WS.MID_PAYLOAD_LEN:
             # use next 8 bytes for length
@@ -128,9 +159,12 @@ class WS(TCP):
             payload_len = 126
         header += bytes((WS.Mask.OFF << 7 | payload_len,)) + ext_payload_len
 
-        log.debug('WebSocket prepared frame header for opcode', hex(opcode), 'of', len(message), 'bytes:', header.hex())
-        super().prepare(sock, io.BytesIO(header + message))
-
+        log.debug(
+            'WebSocket frame send:', format_bytes(header[:2]),
+            WS.FIN.name(header[0] > 7), WS.Opcode.name(header[0] & 1),
+            'length:', len(data))
+        
+        super().prepare(sock, io.BytesIO(header + data))
 
     def prepare(self, sock: socket.socket, *data: list[bytes or io.BufferedIOBase]):
         """prepare WebSocket frames"""

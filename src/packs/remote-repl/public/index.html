@@ -61,6 +61,9 @@
       overflow: auto;
       font-family: monospace;
     }
+    :is(#input, #input_display)::-webkit-scrollbar {
+      visibility: hidden;
+    }
     #output a {
       color: #8df;
       text-decoration: underline;
@@ -105,6 +108,7 @@
     outline: none;
     "
     onkeydown="
+    const L = event.target
     if (event.key === 'Enter') {
       if (event.shiftKey) {
         event.preventDefault()
@@ -113,48 +117,70 @@
         return
       }
   
-      const cursor = event.target.selectionStart
+      const cursor = L.selectionStart
       let start = cursor
-      let text = event.target.value
-      while (start && text[start] !== '\n') start -= 1
+      let text = L.value
+      while (start && text[start - 1] !== '\n') start -= 1
       const line = text.slice(start, cursor)
       if (line.trim()) {
         event.preventDefault()
         const indentMatch = /^\s*/.exec(line)
         const colonMatch = /:\s*$/.exec(line)
-        const indent = (indentMatch[0] || '\n') + (colonMatch ? '  ' : '')
-        text = text.slice(0, cursor) + indent + text.slice(cursor)
+        const indent = indentMatch[0] + (colonMatch ? '  ' : '')
+        console.debug('INDENT', line, indentMatch, colonMatch, indent)
+        text = text.slice(0, cursor) + '\n' + indent + text.slice(cursor)
         setInputValue(text)
-        event.target.selectionStart = event.target.selectionEnd = cursor + indent.length
+        L.selectionStart = L.selectionEnd = cursor + 1 + indent.length
       }
-    } else if (event.key === 'Tab' && !event.metaKey) {
+    } else if ((event.key === 'Tab' && !event.metaKey) || (event.key === '/' && event.metaKey)) {
       event.preventDefault()
-      const L = event.target
-      const text = L.value
-      // indent from start of each selected line
-      let start = L.selectionStart, end = L.selectionEnd
-      const untab = event.shiftKey
-      let i = Math.max(0, start - 1)
-      while (i && text[i] !== '\n') i -= 1
-      start = text[i] === '\n' ? i + 1 : i
-      let indented = text.slice(0, i)
-      for (; i <= L.selectionEnd; i++) {
-        if (!i) {
-          if (untab) for (let j = 0; j < 2 && text[i] === ' '; i++, j++) {}
-          else indented += '  '
-        }
-        if (text[i]) indented += text[i]
-        if (text[i] === '\n') {
-          i += 1
-          if (untab) for (let j = 0; j < 2 && text[i] === ' '; i++, j++) {}
-          else indented += '  '
-          i -= 1
-        }
+      const isTab = event.key === 'Tab'
+      const prefix = isTab ? '  ' : '# '
+      let i = L.selectionStart
+      while (i && L.value[i - 1] !== '\n') i -= 1
+      const unprefix = isTab ? event.shiftKey : L.value[i] === '#'
+
+      let lines = L.value.split('\n')
+      let start, end
+      for (let i = 0, l = 0; i <= L.selectionEnd && l < lines.length; i += lines[l].length + 1, l += 1) {
+        if (i <= L.selectionStart) start = l
+        end = l
       }
-      indented += text.slice(i)
-      setInputValue(indented)
-      L.selectionEnd = Math.max(start, end + (indented.length - text.length))
-      L.selectionStart = start === end ? L.selectionEnd : start
+
+      lines = lines.map((x, i) => (i < start || i > end) ? x : unprefix ? x.replace(prefix, '') : prefix + x)
+      setInputValue(lines.join('\n'))
+      setTimeout(() => {
+        for (let i = 0, l = 0; l <= end; i += lines[l].length + 1, l += 1) {
+          if (l === start) L.selectionStart = i
+          if (l === end) L.selectionEnd = i + lines[l].length
+        }
+      })
+    } else if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+      const lines = L.value.split('\n')
+      let start, end
+      for (let i = 0, l = 0; i <= L.selectionEnd && l < lines.length; i += lines[l].length + 1, l += 1) {
+        console.debug(i, L.selectionStart, L.selectionEnd, l, start, end)
+        if (i <= L.selectionStart) start = l
+        end = l
+      }
+      console.debug('SHIFT', start, end, L.selectionStart, L.selectionEnd, lines, L.value.slice(L.selectionStart, L.selectionEnd), lines.slice(start, end + 1))
+      const up = event.key === 'ArrowUp'
+      const valid = up ? start > 0 : end < lines.length - 1
+      if (valid) {
+        const selection = [L.selectionStart, L.selectionEnd].map(x => x + (up ? -1 : 1) * (lines[up ? start - 1 : end + 1].length + 1))
+        if (up) {
+          lines.reverse()
+          ;[start, end] = [lines.length - 1 - end, lines.length - 1 - start]
+        }
+        lines.splice(start, 0, lines.splice(end + 1, 1))
+        if (up) lines.reverse()
+        setInputValue(lines.join('\n'))
+        console.debug(selection)
+        setTimeout(() => {
+          L.selectionStart = selection[0]
+          L.selectionEnd = selection[1]
+        })
+      }
     }
     "
     onchange="setInputValue(event.target.value)"
@@ -369,10 +395,11 @@
         event.target.value = event.target.value.slice(0, 2) + history[history_index]
         setTimeout(() => event.target.selectionStart = event.target.value.length)
       }
+    } else if (event.key === 'c' && event.ctrlKey) {
+      ws.send('interrupt')
     }
     event.target.style.minHeight = `${event.target.value.split('\n').length * 1.1 + .5}em`
     setTimeout(() => output.scrollTop = output.scrollHeight)
-
     "
     ></textarea>
   </div>
@@ -397,7 +424,9 @@
     const run_history = JSON.parse(localStorage.getItem('run-history') || '[]')
     let run_history_index = JSON.parse(localStorage.getItem('run-history-index') || '0')
     const setInputValue = value => {
-      input_display.textContent = input.value = value
+      input_display.textContent = (input.value = value).replace(/\n$/, '\n ')
+      input_display.scrollTop = input.scrollTop
+      input_display.style.height = input.clientHeight + 'px'
       localStorage.setItem(VALUE_KEY, value)
       const _highlight = () => {
         window.hljs ? window.hljs.highlightElement(input_display) : setTimeout(_highlight, 1000)
@@ -414,12 +443,15 @@
       return text?.replace(/^((\$ )? *\n)+/, '').replace(/((\| )? *\n?)+$/, '')
     }
     const log = (item, waiting=false) => {
+      console.debug('LOG', item)
       const scrolled = Math.abs((output.scrollTop + output.clientHeight) - output.scrollHeight) < 16
       item && logs.push(item)
+      if (logs.find(x => x.waiting)) logs.splice(logs.findIndex(x => x.waiting), 1)
+      const lastLog = logs.slice(-1)[0]
+      if (lastLog?.action === 'run' && item?.action === 'run') logs.splice(-1, 1)
       if (waiting) logs.push({ html: `<span style="
       color: #0f8;
       "><div class="loader"></div> waiting for result from ${board_name || 'Pico W'}</span>`, waiting })
-      else if (logs.find(x => x.waiting)) logs.splice(logs.findIndex(x => x.waiting), 1)
       const elements = logs
         .map(x => {
           if (x instanceof Error || (x?.includes && x.includes('error:'))) {
@@ -440,7 +472,7 @@
       output_input.value = waiting ? '' : '$ '
       if (scrolled) output.scrollTop = output.scrollHeight
     }
-    const action = (name=false, detail=false, expanded=false, waiting=false) => {
+    const action = (name=false, detail=false, expanded=false, waiting=false, history=true) => {
       detail = detail &&
         trim_newlines(detail)
         .split('\n')
@@ -453,6 +485,14 @@
         .join('\n')
       
       console.debug('ACTION', { name, detail, expanded, waiting })
+      if (name === 'run') {
+        if (history && command !== run_history.slice(-1)[0]) {
+          run_history.push(command)
+        }
+        run_history_index = run_history.length - 1
+        localStorage.setItem('run-history', JSON.stringify(run_history))
+        localStorage.setItem('run-history-index', JSON.stringify(run_history_index))
+      }
 
       log(!name ? {
         html: `<span style="color:gold">${
@@ -496,61 +536,106 @@
 
       if (waiting) log(false, waiting)
     }
+
+
+    const history = []
+    let history_index = 0
+
+    let board_name = undefined
+    const _parseBoard = output => {
+      // parse output for board.py contents
+      const board_name_match = /name = "([^"]+)"/m.exec(output)
+      if (board_name_match) board_name = board_name_match[1]
+    }
+    const _parseLinks = (output, partial_output=false) => {
+      let html
+      if (output) {
+        const linkRegex =
+          /(^|[^.\w\d\-_:/?=&%#@+\n])((https?:\/\/)?(([\w\d-]+\.)+\w{2,}|localhost)([\w\d\-_:/?=&%#@+]{1,}(?:\.(?! ))?){1,})/gim
+        const internalLinkRegex =
+          /(^|[^.\w\d\-_:/?=&%#@+\n])([/?](?:[\w\d\-_:/?=&%#@+.]{1,}[\w\d\-_]{1,}(?:\.(?! ))?){1,})/gim
+        html = output
+        .replace(linkRegex, '$1<a href="http://$2" target="_blank" rel="noreferrer">$2</a>')
+        .replace('http://http', 'http')
+        .replace(internalLinkRegex, '$1<a href="$2">$2</a>')
+      } else if (!partial_output) {
+        html = `<span style="opacity:.5">(no output)</span>`
+      }
+      return { html }
+    }
+    let ws, ws_id, _active_repl = false, _logged = false
+    const connectWebSocket = () => {
+      ws = new WebSocket(`ws://${location.host}`)
+      ws.onopen = e => ws.send('connect')
+      ws.onmessage = e => {
+        const [type, data] = e.data.split(/ (.*)/)
+        console.debug('WebSocket:', type, data)
+        switch (type) {
+          case 'log':
+            _parseBoard(data)
+            log(_parseLinks(data || '', true), _active_repl)
+            _logged = _active_repl
+            break
+          case 'repl':
+            const [_type, _data] = data.split(/ (.*)/)
+            if (_type === 'complete') {
+              _active_repl = false
+              log(false, false)
+            }
+            break
+          case 'command':
+            action('run', data, false, true)
+            break
+          case 'connected':
+            ws_id = data
+            break
+        }
+      }
+      ws.onclose = e => {
+        setTimeout(connectWebSocket, 5_000) // retry every 5s
+      }
+    }
+    connectWebSocket()
     let i = 0
     const logged = async (url, force=false) => {
       console.debug('LOGGED', url)
-      try {
-        return fetch(url)
-        .then(res => res.text())
-        .then(text => {
-          console.debug('REPL RESULT', text)
-          // always parse board.py contents for new name
-          const board_name_match = /name = "([^"]+)"/m.exec(text)
-          if (board_name_match) board_name = board_name_match[1]
-          // link elements
-          let html
-          if (text) {
-            const linkRegex =
-              /(^|[^.\w\d\-_:/?=&%#@+\n])((https?:\/\/)?(([\w\d-]+\.)+\w{2,}|localhost)([\w\d\-_:/?=&%#@+]{1,}(?:\.(?! ))?){1,})/gim
-            const internalLinkRegex =
-              /(^|[^.\w\d\-_:/?=&%#@+\n])([/?](?:[\w\d\-_:/?=&%#@+.]{1,}[\w\d\-_]{1,}(?:\.(?! ))?){1,})/gim
-            html = text
-            .replace(linkRegex, '$1<a href="http://$2" target="_blank" rel="noreferrer">$2</a>')
-            .replace('http://http', 'http')
-            .replace(internalLinkRegex, '$1<a href="$2">$2</a>')
-          } else {
-            html = `<span style="opacity:.5">(no output)</span>`
-          }
-          log({ html })
-          return text
-        })
-        .catch(async error => {
-          await new Promise(resolve => setTimeout(resolve, 1000))
-          log(error)
-          return Promise.resolve('')
-        })
-        .finally(() => {
-          action()
-        })
-      } catch (error) {
+      commands['run'].disabled = true
+
+      _active_repl = true
+      _logged = false
+      return fetch(url, {
+        headers: {
+          ...(ws_id ? {'X-Pico-Fi-Socket-Id': ws_id} : {}),
+        }
+      })
+      .then(res => res.text())
+      .then(text => {
+        if (_logged && _active_repl) return // wait for WebSocket 'repl complete'
+
+        console.debug('REPL RESULT', text)
+        _parseBoard(text)
+        log(!_logged && _parseLinks(text))
+        _active_repl = false
+        return text
+      })
+      .catch(async error => {
         await new Promise(resolve => setTimeout(resolve, 1000))
         log(error)
         return Promise.resolve('')
-      }
+      })
+      .finally(() => {
+        action()
+        commands['run'].disabled = false
+      })
     }
     const command = (text, expanded=false, history=true) => {
-      action('run', text, expanded, true)
-      
-      if (history && text !== run_history.slice(-1)[0]) {
-        run_history.push(text)
-      }
-      run_history_index = run_history.length - 1
-      localStorage.setItem('run-history', JSON.stringify(run_history))
-      localStorage.setItem('run-history-index', JSON.stringify(run_history_index))
+      if (commands['run'].disabled) return
+
+      action('run', text, expanded, true, history)
       
       return logged(`/repl?${new URLSearchParams({
         command: encodeURIComponent(text),
-        run_option: run_option_select.value,
+        ...(history ? { run_option: run_option_select.value } : {}),
       }).toString()}`)
     }
     
@@ -560,10 +645,6 @@
   
 abc()
 `)
-    const history = []
-    let history_index = 0
-
-    let board_name = undefined
     command(`
 try:
   with open('board.py') as f: print(f.read())

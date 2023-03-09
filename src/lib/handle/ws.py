@@ -4,9 +4,10 @@ WebSocket handler
 import binascii
 import hashlib
 import select
+import socket
 
 from lib.stream.ws import WS
-from lib import chain
+from lib import chain, decode
 from lib.logging import log
 from lib.server import Orchestrator, Protocol, ProtocolHandler, connection
 
@@ -24,19 +25,38 @@ class WebSocket(ProtocolHandler):
     """
 
     class Message:
-        def __init__(self, ws, sock, data):
+        def __init__(self, ws, sock, opcode: WS.Opcode, data: bytes):
             self._ws = ws
-            self._sock = sock
+            self.s_id = id(sock)
+            self.opcode = opcode
             self.data = data
+            if opcode == WS.Opcode.TEXT:
+                [self.type, *_content] = data.split(b' ', 1)
+                self.content = decode(b' '.join(_content))
+            else: self.type = None
 
-        def reply(self, data: bytes or str or dict):
-            self._ws.send(self._sock, data)
+        def reply(self, *data: bytes or str or dict, opcode=WS.Opcode.TEXT):
+            self._ws.emit(*data, opcode=opcode, socket_id=self.s_id)
+
+        def share(self, *data, opcode=WS.Opcode.TEXT):
+            other_ids = [
+                s_id
+                for s_id in [x.sock for x in self._ws.conns]
+                if s_id != self.s_id]
+            for s_id in other_ids:
+                self._ws.emit(*data, opcode=opcode, socket_id=s_id)
+
+        def all(self, *data, opcode=WS.Opcode.TEXT):
+            self._ws.emit(*data, opcode=opcode)
+
+        def __repr__(self) -> str:
+            return f'{self.s_id} {WS.Opcode.name(self.opcode)} {self.data}'
 
 
-    def __init__(self, orch: Orchestrator, handler=None):
+    def __init__(self, orch: Orchestrator, events={}):
         super().__init__(orch, Protocol.WebSocket)
         self.io = WS(orch.poller)
-        self.handler = handler
+        self.events = events
         self.conns: set[connection] = set()
 
     KeyHeader = b'Sec-WebSocket-Key'
@@ -57,20 +77,39 @@ class WebSocket(ProtocolHandler):
     def handle(self, sock, event):
         conn = connection.of(sock)
         log.debug('SOCKET EVENT', conn, event & select.POLLOUT, event & select.POLLIN)
-        if conn not in self.conns:
-            self.conns.add(conn)
-            # send PING frame to start
-            self.io.send(sock, WS.Opcode.PING)
+        if conn not in self.conns: self.conns.add(conn)
         elif event & select.POLLOUT: self.write(sock) # we have data to write
         else: self.read(sock)
 
-    def read(self, sock):
+    def emit(self, *data: str or bytes, opcode=WS.Opcode.TEXT, socket_id=0):
+        if opcode == WS.Opcode.TEXT: message = ' '.join(str(x) for x in data)
+        else: message = b''.join(x for x in data)
+        sent = False
+        for sock in [x.sock for x in self.conns]:
+            if socket_id and id(sock) != socket_id: continue
+            try:
+                log.info('WebSocket send', id(sock), WS.Opcode.name(opcode))
+                self.io.send(sock, opcode, message)
+                sent = True
+            except Exception as e:
+                log.exception(e)
+                self.conns.remove(connection.of(sock))
+        return sent
+
+    def read(self, sock: socket.socket):
         """read WebSocket frame from client and pass to handler"""
-        message = self.io.read(sock)
-        if message:
-            log.info('WebSocket message:', message.decode())
-            if self.handler: self.handler(message)
-            else: self.io.send(sock, WS.Opcode.TEXT, message)
+        [opcode, data] = self.io.read(sock)
+        if opcode == WS.Opcode.CLOSE: self.conns.remove(connection.of(sock))
+        if opcode == WS.Opcode.PING: self.io.send(sock, WS.Opcode.PONG)
+        if data:
+            msg = WebSocket.Message(self, sock, opcode, data)
+            log.info('WebSocket read', msg)
+            handler = self.events.get(msg.type, None)
+            if not handler:
+                if msg.type == b'connect':
+                    self.emit('connected', msg.s_id, socket_id=msg.s_id)
+                elif opcode in self.events: handler = self.events[opcode]
+            handler and handler(msg)
 
     def write(self, sock):
         # if write complete, switch back to read

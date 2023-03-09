@@ -16,16 +16,11 @@
   <script>
     const _persist = (method, data) =>
       fetch(`/${method}?data=${encodeURIComponent(JSON.stringify(data))}`)
-      .then(x => {
-        console.debug(x)
-        return x
-      })
       .then(res => res.json())
-      .then(x => {
-        console.debug(x)
-        return x
+      .then(({ data }) => {
+        console.debug(method, 'result:', data)
+        return data
       })
-      .then(({ data }) => data) 
     
     const get = data => _persist('get', data)
     const set = data => _persist('set', data)
