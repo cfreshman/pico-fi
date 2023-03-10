@@ -10,13 +10,11 @@ https://user-images.githubusercontent.com/19336643/222288358-0db43417-c58f-401e-
 
 ### Setup
 
-1. Build [pico-fi](../../../README.md) with led-indicator enabled:  
-   Hold BOOTSEL, plug in Pico,
+### Setup
+1. Install [pico-fi](/README.md#install)
+1. Build with **led-indicator** enabled
    ```
-   curl http://micropython.org/download/rp2-pico-w/rp2-pico-w-latest.uf2 > $([ $(uname) == Darwin ] && echo /Volumes || echo /media/$USER)/RPI-RP2/m.uf2
-   pip3 install rshell
-   git clone https://github.com/cfreshman/pico-fi
-   cd pico-fi && python3 build -a --packs led-indicator
+   python3 build -a led-indicator
    ```
 1. (Optional) Connect an LED between GP17 and GND  
 1. Go to [switches.freshman.dev](https://switches.freshman.dev) and turn on `default/default`  

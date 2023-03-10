@@ -22,8 +22,9 @@ from machine import Pin
 import pico_fi
 
 # Connect to the Pico W's network:
-# (on-board LED will be on if started successfully)
 app = pico_fi.App(id='w-pico', password='pico1234')
+
+# (on-board LED will be on if started successfully)
 led = Pin('LED', Pin.OUT)
 @app.started
 def started(): led.on() 
@@ -89,6 +90,7 @@ You should see a new `w-pico` wireless network appear (password: `pico1234`). Co
 
 > Alternatively, specify the network credentials at build time: `python3 build -a -n "network:password"`
 
+
 ### Post-install
 
 Edit the network name/password or add functionality in [main.py](./src/main.py), HTML in [public/index.html](./src/public/index.html)
@@ -100,6 +102,7 @@ See [packs/hello-world](./src/packs/remote-repl/__init__.py) for a showcase of p
 #### Looking for project ideas?
 * A multiplayer chess/checkers app anyone in the area can connect to
 * Publish sensor data with MQTT https://www.tomshardware.com/how-to/send-and-receive-data-raspberry-pi-pico-w-mqtt
+
 
 ### Potential upcoming features
 - [x] WebSocket event handlers

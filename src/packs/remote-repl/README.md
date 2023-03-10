@@ -5,8 +5,8 @@ Run MicroPython commands on your Pico W, wirelessly
 ![](https://freshman.dev/api/file/public-pico-remote-repl.png)
 
 ### Setup
-1. Install [pico-fi](../../../README.md)
-1. Build with remote-repl enabled
+1. Install [pico-fi](/README.md#install)
+1. Build with **remote-repl** enabled
    ```
    python3 build -a --packs remote-repl
    ```
