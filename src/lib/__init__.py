@@ -3,6 +3,7 @@ miscellaneous utilities
 """
 import io
 from random import choice
+import re
 
 class enum:
     def __init__(self, value): self.value = value
@@ -107,6 +108,14 @@ def part(str, n):
 def delimit(str, n, sep):
     """add delimiter to string between groups of n tokens"""
     return sep.join(part(str, n))
+
+
+def split_url(url: str):
+    """return proto (or http://), host, and path"""
+    if not 'http' in url: url = 'http://'+url
+    proto, host, path = \
+        re.search(r'([^\/]+\/\/)([^\/]+)\/(.+)', url).groups()
+    return proto, host, path
 
 
 class MergedReadInto:

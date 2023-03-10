@@ -7,7 +7,7 @@ import io
 import select
 import socket
 
-from lib import MergedReadInto, defaulter_dict
+from lib import MergedReadInto, defaulter_dict, split_url
 from lib.logging import log
 from lib.server import connection
 
@@ -19,10 +19,31 @@ class TCP:
     MSS = 536
     Writer = namedtuple('Writer', 'data buff buffmv range')
 
-    def __init__(self, poller: select.poll):
+    def __init__(self, poller: select.poll = None):
         self._poller = poller
         self._reads: dict[int, bytes] = {}
         self._writes: defaulter_dict[int, list[TCP.Writer]] = defaulter_dict()
+    
+    @staticmethod
+    def send(url: str, *data: list[bytes or io.BufferedIOBase]):
+        proto, host, path = split_url(url)
+        log.info('open TCP connection', host)
+        try:
+            x = socket.getaddrinfo('http://'+host, 80)
+            log.info(x)
+            addr = x[0][-1]
+            # addr = socket.getaddrinfo('http://'+host, 80)[0][-1]
+        except:
+            x = socket.getaddrinfo('https://'+host, 443)
+            log.info(x)
+            addr = x[0][-1]
+            # addr = socket.getaddrinfo('https://'+host, 443)[0][-1]
+        sock = socket.socket()
+        sock.connect(addr)
+        log.info('connected TCP socket', addr, sock)
+        tcp = TCP()
+        tcp.prepare(sock, *data)
+        return [tcp, sock]
 
     def read(self, sock: socket.socket):
         """read client request data from socket"""
@@ -46,7 +67,7 @@ class TCP:
         buff = bytearray(b'00' * TCP.MSS)
         self._writes.get(id(sock), lambda x: []).append(
             TCP.Writer(data, buff, memoryview(buff), [0, data.readinto(buff)]))
-        self._poller.modify(sock, select.POLLOUT)
+        self._poller and self._poller.modify(sock, select.POLLOUT)
 
     def write(self, sock: socket.socket) -> True or None:
         """write next packet, return True if all packets written"""
@@ -89,5 +110,5 @@ class TCP:
 
         log.info('end', connection.of(sock))
         sock.close()
-        self._poller.unregister(sock)
+        self._poller and self._poller.unregister(sock)
         self.clear(sock)

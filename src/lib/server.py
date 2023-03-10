@@ -24,8 +24,7 @@ class SocketPollHandler:
 """
 transport
 """
-import socket
-
+import socket, ussl, ubinascii
 from lib import defaulter_dict, enumstr
 
 
@@ -47,14 +46,16 @@ class Transport:
 
 class connection:
     _instances: dict[socket.SocketKind, object] = defaulter_dict()
-
-    def __init__(self, tran: transport, sock: socket.socket=None):
-        self.tran = tran
-        if not sock: sock = socket.socket(socket.AF_INET, tran.sock_type)
+    
+    def __init__(
+        self, transport: transport, sock: socket.socket=None, ssl=False):
+        self.transport = transport
+        if not sock: sock = socket.socket(socket.AF_INET, transport.sock_type)
+        if ssl: sock = ussl.wrap_socket(sock, server_side=True)
         self.sock = sock
         connection._instances[id(sock)] = self
 
-    def __repr__(self): return f'<connection {self.tran} {id(self.sock)}>'
+    def __repr__(self): return f'<connection {self.transport} {id(self.sock)}>'
     def __hash__(self): return id(self.sock)
 
     @staticmethod
@@ -77,6 +78,7 @@ class protocol(enumstr):
 class Protocol:
     DNS = protocol(b'DNS', Transport.UDP)
     HTTP = protocol(b'HTTP', Transport.TCP)
+    HTTPS = protocol(b'HTTPS', Transport.TCP)
     WebSocket = protocol(b'WebSocket', Transport.TCP)
 
 

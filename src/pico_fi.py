@@ -159,8 +159,9 @@ class App:
         self.websocket = WebSocket(self.orch, self.events)
         self.servers = [
             DNS(self.orch, self.ap_ip),
-            self.websocket,
             HTTP(self.orch, self.ip_sink, self.routes),
+            HTTP(self.orch, self.ip_sink, self.routes, ssl=True),
+            self.websocket,
         ]
 
         # start access point

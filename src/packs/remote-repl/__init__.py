@@ -74,7 +74,7 @@ def configure(app: App):
       # provide auth: ?user=####&passhash=####
       #   token = "####" returned
       # normal auth: ?token=####
-      # remove auth: ?token=####&user=####
+      # remove auth: ?token=##x##&user=####
       token = req.query.get('token', None)
       user = req.query.get('user', None)
       passhash = req.query.get('passhash', None)

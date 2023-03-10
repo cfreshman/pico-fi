@@ -3,7 +3,7 @@ import socket
 import select
 
 from lib.stream.tcp import TCP
-from lib import decode_bytes, defaulter_dict, encode, encode_bytes, format_bytes, enum
+from lib import decode_bytes, defaulter_dict, encode, encode_bytes, format_bytes
 from lib.logging import log
 
 

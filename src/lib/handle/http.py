@@ -12,7 +12,7 @@ import micropython
 
 from lib.handle.ws import WebSocket
 from lib.stream.tcp import TCP
-from lib import encode, unquote
+from lib import encode, unquote, split_url
 from lib.logging import cmt, log
 from lib.server import Orchestrator, Protocol, Server, connection, IpSink
 
@@ -24,6 +24,13 @@ class HTTP(Server):
 
     NL = b'\r\n'
     END = NL + NL
+
+    class Method:
+        GET = 'GET'
+        POST = 'POST'
+        PUT = 'PUT'
+        DELETE = 'DELETE'
+        HEAD = 'HEAD'
 
     class ContentType:
         class Value:
@@ -122,8 +129,9 @@ class HTTP(Server):
             _thread.start_new_thread(func, ())
 
 
-    def __init__(self, orch: Orchestrator, ip_sink: IpSink, routes: dict[bytes, bytes or function]):
-        super().__init__(orch, 80, Protocol.HTTP)
+    def __init__(self, orch: Orchestrator, ip_sink: IpSink, routes: dict[bytes, bytes or function], ssl=False):
+        super().__init__(
+            orch, 443 if ssl else 80, Protocol.HTTPS if ssl else Protocol.HTTP)
         self.tcp = TCP(orch.poller)
         self.ip_sink = ip_sink
         self.ip = ip_sink.get()
@@ -179,6 +187,7 @@ class HTTP(Server):
     def parse_route(self, req: Request):
         log.info(req.path.split(b'/'))
         prefix = b'/'+(req.path.split(b'/')+[b''])[1]
+        log.info('HTTP PARSE ROUTE', prefix, self.routes.get(prefix, None), self.routes)
         return (req.host == self.ip or not self.ip_sink.get()) and self.routes.get(prefix, None)
     def handle_request(self, sock, req: Request):
         """respond to an HTTP request"""
@@ -233,3 +242,29 @@ class HTTP(Server):
                 self.ws_upgrades.remove(conn)
             else:
                 self.tcp.end(sock) # HTTP response complete, end connection
+
+    
+    @staticmethod
+    def request(method, url: str, body: str or bytes = b'', headers={}):
+        """low-memory HTTP request"""
+
+        proto, host, path = split_url(url)
+        lines = []
+        lines.append(f'{method} /{path} HTTP/1.0')
+        lines.append(f'Host: {host}')
+        for k,v in headers.items():
+            lines.append(encode(k) + b': ' + encode(v))
+        lines.append(b'')
+        lines.append(body)
+        data = HTTP.NL.join(encode(x) for x in lines) + HTTP.END
+        print('HTTP request:', data)
+        [tcp, sock] = TCP.send(url, data)
+        while not tcp.write(sock): pass
+        res = b''
+        while True:
+            try: res = tcp.read(sock)
+            except Exception as e: log.exception(e)
+            if res: log.info(str(res, 'utf8'), end='')
+            else: break
+        tcp.end(sock)
+        return res

@@ -302,6 +302,84 @@
     font-size: 1em;
     line-height: inherit;
     "></p>
+    <script>
+      const editorKeyDown = event => {
+        let start = event.target.selectionStart
+        for (let i = 0; i < 3; i++, start--) {
+          if (start <= 0) {
+            event.target.selectionStart = 2
+            if (event.key === 'Backspace') {
+              if (event.target.selectionEnd === event.target.selectionStart) {
+                return event.preventDefault()
+              }
+            }
+            break
+          }
+          if (event.target.value[start - 1] === '\n') {
+            if (event.key === 'Backspace') {
+              event.target.selectionStart = start - 1
+            } else {
+              event.target.selectionStart = start + 2
+            }
+            break
+          }
+        }
+
+        const value = history[history_index] = event.target.value
+          .split('\n')
+          .map(x => x.replace(/^([$|] )+/, ''))
+          .join('\n')
+        if (event.key === 'Enter') {
+          if (event.shiftKey) {
+            const cursor = event.target.selectionStart
+            let start = cursor
+            
+            let text = value
+            while (start && text[start] !== '\n') start -= 1
+            const line = text.slice(start + 1, cursor).replace(/^\| /, '')
+            if (line.trim()) {
+              event.preventDefault()
+              const indentMatch = /^\s*/.exec(line)
+              const openerMatch = /[:\{]\s*$/.exec(line)
+              const indent = '\n| ' + (indentMatch[0] || '') + (colonMatch ? '  ' : '')
+              text = text.slice(0, cursor) + indent + text.slice(cursor)
+              event.target.value = text
+              event.target.selectionStart = cursor + indent.length
+            }
+          } else {
+            event.preventDefault()
+            log(
+              trim_newlines(value)
+                .split('\n')
+                .map((x,i) => ((i ? '| ' : '$ ')+x).replace(/^([$|] )+/, '$1'))
+                .join('\n'),
+              waiting=true)
+            logged(`/repl?${new URLSearchParams({
+              command: encodeURIComponent(value)
+            }).toString()}`)
+            history_index = history.length
+            history[history_index - 1] = value
+            history.push('')
+          }
+        } else if (event.key === 'ArrowUp') {
+          if (history_index > 0) {
+            history_index -= 1
+            event.target.value = event.target.value.slice(0, 2) + history[history_index]
+            setTimeout(() => event.target.selectionStart = event.target.value.length)
+          }
+        } else if (event.key === 'ArrowDown') {
+          if (history_index < history.length - 1) {
+            history_index += 1
+            event.target.value = event.target.value.slice(0, 2) + history[history_index]
+            setTimeout(() => event.target.selectionStart = event.target.value.length)
+          }
+        } else if (event.key === 'c' && event.ctrlKey) {
+          ws.send('interrupt')
+        }
+        event.target.style.minHeight = `${event.target.value.split('\n').length * 1.1 + .5}em`
+        setTimeout(() => output.scrollTop = output.scrollHeight)
+      }
+    </script>
     <textarea
     style="
     -webkit-appearance: none;
@@ -325,82 +403,7 @@
     event.target.style.minHeight = `${event.target.value.split('\n').length * 1.1 + .5}em`
     setTimeout(() => output.scrollTop = output.scrollHeight)
     "
-    onkeydown="
-    let start = event.target.selectionStart
-    for (let i = 0; i < 3; i++, start--) {
-      if (start <= 0) {
-        event.target.selectionStart = 2
-        if (event.key === 'Backspace') {
-          if (event.target.selectionEnd === event.target.selectionStart) {
-            return event.preventDefault()
-          }
-        }
-        break
-      }
-      if (event.target.value[start - 1] === '\n') {
-        if (event.key === 'Backspace') {
-          event.target.selectionStart = start - 1
-        } else {
-          event.target.selectionStart = start + 2
-        }
-        break
-      }
-    }
-
-    const value = history[history_index] = event.target.value
-      .split('\n')
-      .map(x => x.replace(/^([$|] )+/, ''))
-      .join('\n')
-    if (event.key === 'Enter') {
-      if (event.shiftKey) {
-        const cursor = event.target.selectionStart
-        let start = cursor
-        
-        let text = value
-        while (start && text[start] !== '\n') start -= 1
-        const line = text.slice(start + 1, cursor).replace(/^\| /, '')
-        if (line.trim()) {
-          event.preventDefault()
-          const indentMatch = /^\s*/.exec(line)
-          const colonMatch = /:\s*$/.exec(line)
-          const indent = '\n| ' + (indentMatch[0] || '') + (colonMatch ? '  ' : '')
-          text = text.slice(0, cursor) + indent + text.slice(cursor)
-          event.target.value = text
-          event.target.selectionStart = cursor + indent.length
-        }
-      } else {
-        event.preventDefault()
-        log(
-          trim_newlines(value)
-            .split('\n')
-            .map((x,i) => ((i ? '| ' : '$ ')+x).replace(/^([$|] )+/, '$1'))
-            .join('\n'),
-          waiting=true)
-        logged(`/repl?${new URLSearchParams({
-          command: encodeURIComponent(value)
-        }).toString()}`)
-        history_index = history.length
-        history[history_index - 1] = value
-        history.push('')
-      }
-    } else if (event.key === 'ArrowUp') {
-      if (history_index > 0) {
-        history_index -= 1
-        event.target.value = event.target.value.slice(0, 2) + history[history_index]
-        setTimeout(() => event.target.selectionStart = event.target.value.length)
-      }
-    } else if (event.key === 'ArrowDown') {
-      if (history_index < history.length - 1) {
-        history_index += 1
-        event.target.value = event.target.value.slice(0, 2) + history[history_index]
-        setTimeout(() => event.target.selectionStart = event.target.value.length)
-      }
-    } else if (event.key === 'c' && event.ctrlKey) {
-      ws.send('interrupt')
-    }
-    event.target.style.minHeight = `${event.target.value.split('\n').length * 1.1 + .5}em`
-    setTimeout(() => output.scrollTop = output.scrollHeight)
-    "
+    onkeydown="editorKeyDown"
     ></textarea>
   </div>
   <script>
