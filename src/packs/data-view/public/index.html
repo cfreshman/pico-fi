@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>pico-fi data-view</title>
+  <link rel="icon" href="/icon.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8">
+  <style>
+    html, body {
+      height: -webkit-fill-available; width: -webkit-fill-available;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; text-align: center;
+      font-family: system-ui;
+    }
+    html {
+      padding: 1em;
+    }
+    textarea {
+      width: 100%;
+      flex-grow: 1;
+    }
+    body > :not(:last-child) {
+      margin-bottom: .25em;
+    }
+  </style>
+  <script>
+    const _persist = (method, data={}) =>
+      fetch(`/${method}?data=${encodeURIComponent(JSON.stringify(data))}`)
+      .then(res => res.json())
+      .then(({ data }) => {
+        console.debug(method, 'result:', data)
+        return data
+      })
+    const get = data => _persist('get', data)
+    const set = data => _persist('set', data)
+
+    const Q = (L, q=undefined) => (q ? L : document.body).querySelector(q || L)
+    const QQ = (L, q=undefined) => Array.from((q ? L : document.body).querySelectorAll(q || L))
+  </script>
+</head>
+<body>
+
+  <script>
+    const editorKeyDown = event => {
+      const L = event.target
+      if (event.key === 'Enter') {
+        if (event.shiftKey) return commands.save.click()
+
+        const cursor = L.selectionStart
+        let start = cursor
+        let text = L.value
+        while (start && text[start - 1] !== '\n') start -= 1
+        const line = text.slice(start, cursor)
+        if (line.trim()) {
+          event.preventDefault()
+          const indentMatch = /^\s*/.exec(line)
+          const bracketMatch = /[\{\[]\s*$/.exec(line)
+          const indent = indentMatch[0] + (bracketMatch ? '  ' : '')
+          console.debug('INDENT', line, indentMatch, bracketMatch, indent)
+          text = text.slice(0, cursor) + '\n' + indent + text.slice(cursor)
+          L.value = text
+          L.selectionStart = L.selectionEnd = cursor + 1 + indent.length
+        }
+      } else if ((event.key === 'Tab' && !event.metaKey) || (event.key === '/' && event.metaKey)) {
+        event.preventDefault()
+        const isTab = event.key === 'Tab'
+        const prefix = isTab ? '  ' : '# '
+        let i = L.selectionStart
+        while (i && L.value[i - 1] !== '\n') i -= 1
+        const unprefix = isTab ? event.shiftKey : L.value[i] === '#'
+
+        let lines = L.value.split('\n')
+        let start, end
+        for (let i = 0, l = 0; i <= L.selectionEnd && l < lines.length; i += lines[l].length + 1, l += 1) {
+          if (i <= L.selectionStart) start = l
+          end = l
+        }
+
+        lines = lines.map((x, i) => (i < start || i > end) ? x : unprefix ? x.replace(prefix, '') : prefix + x)
+        L.value = lines.join('\n')
+        setTimeout(() => {
+          for (let i = 0, l = 0; l <= end; i += lines[l].length + 1, l += 1) {
+            if (l === start) L.selectionStart = i
+            if (l === end) L.selectionEnd = i + lines[l].length
+          }
+        })
+      } else if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+        const lines = L.value.split('\n')
+        let start, end
+        for (let i = 0, l = 0; i <= L.selectionEnd && l < lines.length; i += lines[l].length + 1, l += 1) {
+          console.debug(i, L.selectionStart, L.selectionEnd, l, start, end)
+          if (i <= L.selectionStart) start = l
+          end = l
+        }
+        console.debug('SHIFT', start, end, L.selectionStart, L.selectionEnd, lines, L.value.slice(L.selectionStart, L.selectionEnd), lines.slice(start, end + 1))
+        const up = event.key === 'ArrowUp'
+        const valid = up ? start > 0 : end < lines.length - 1
+        if (valid) {
+          const selection = [L.selectionStart, L.selectionEnd].map(x => x + (up ? -1 : 1) * (lines[up ? start - 1 : end + 1].length + 1))
+          if (up) {
+            lines.reverse()
+            ;[start, end] = [lines.length - 1 - end, lines.length - 1 - start]
+          }
+          lines.splice(start, 0, lines.splice(end + 1, 1))
+          if (up) lines.reverse()
+          L.value = lines.join('\n')
+          setTimeout(() => {
+            L.selectionStart = selection[0]
+            L.selectionEnd = selection[1]
+          })
+        }
+      }
+    }
+  </script>
+  <textarea onkeydown="editorKeyDown(event)"></textarea>
+  <div style="
+  width: 100%;
+  display: flex;
+  ">
+    <a href="https://developer.mozilla.org/en-US/docs/Learn/JavaScript/Objects/JSON#json_structure">JSON format</a>&nbsp;<span id="error"></span>
+    <span style="flex-grow: 1"></span>
+    <button>cancel</button>&nbsp;<button>save</button>
+  </div>
+  <script>
+    const editor = Q('textarea')
+    const error = Q('#error')
+    const commands = {}
+    QQ('button').map(x => commands[x.textContent] = x)
+
+    let data
+    const setData = x => {
+      if (x) {
+        data = x
+        editor.value = JSON.stringify({
+          '': '',
+          ...x,
+        }, null, 2)
+        localStorage.setItem('data', JSON.stringify(data))
+      } else {
+        editor.value = '[loading]'
+      }
+    }
+    setData(JSON.parse(localStorage.getItem('data') || 'false'))
+    get().then(setData)
+
+    commands.save.onclick = e => {
+      error.textContent = ''
+      try {
+        const oldData = data
+        data = JSON.parse(editor.value)
+        if (!data['']) delete data['']
+        setData(data)
+
+        // explicitly set deleted fields to 'undefined' to delete
+        const newKeys = new Set(Object.keys(data))
+        const removedKeys = Object.keys(oldData).filter(x => !newKeys.has(x))
+        removedKeys.map(x => data[x] = null)
+        set(data)
+      } catch (e) {
+        error.textContent = e.toString()
+      }
+    }
+    commands.cancel.onclick = e => {
+      error.textContent = ''
+      setData(data)
+    }
+  </script>
+  
+  <div style="padding-top: 1em">
+    [ <a style="color:#ff8686" href="/portal">back to network selection</a> ]
+  </div>
+
+</body>
+</html>

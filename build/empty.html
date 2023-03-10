@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>pico-fi</title>
+  <link rel="icon" href="/icon.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8">
+  <style>
+    html, body {
+      height: 100%; font-family: system-ui; margin: 0;
+    }
+    html, body, #root {
+      width: 100%;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; text-align: center;
+    }
+    #root {
+      flex-grow: 1;
+      padding: 1em;
+    }
+  </style>
+  <script>
+    const _persist = (method, data={}) =>
+      fetch(`/${method}?data=${encodeURIComponent(JSON.stringify(data))}`)
+      .then(res => res.json())
+      .then(({ data }) => {
+        console.debug(method, 'result:', data)
+        return data
+      })
+    const get = data => _persist('get', data)
+    const set = data => _persist('set', data)
+  </script>
+</head>
+<body>
+
+  <div id="root">%ROOT%</div>
+  
+  <p style="position:absolute; bottom:0; padding: 1em">
+    [ <a style="color:#ff8686" href="/portal">back to network selection</a> ]
+  </p>
+
+</body>
+</html>

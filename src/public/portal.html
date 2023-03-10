@@ -32,6 +32,191 @@
       border-color: currentcolor;
       opacity: .125;
     }
+
+    html, body {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      width: 100%;
+      align-items: center;
+      justify-content: center;
+
+      background: white;
+      color: black;
+
+      font-family: system-ui, sans-serif;
+      font-size: 14px;
+      text-align: center;
+    }
+    * { text-align: inherit }
+
+    #container, fieldset {
+      width: calc(100% - 2em);
+      max-width: 400px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: stretch;
+
+      max-height: 24rem;
+    }
+    :is(#container, fieldset) > * {
+      margin-bottom: 1em;
+    }
+
+    .button, input {
+      position: relative;
+      width: auto;
+      display: inline-flex;
+      align-items: center;
+      white-space: pre;
+      box-sizing: border-box;
+      border: 2px;
+      border-radius: 4px;
+      padding: .4em 1em;
+      overflow: hidden;
+      white-space: nowrap;
+      font-size: 1.25em;
+      line-height: 1.5;
+      font-family: inherit;
+      letter-spacing: 0;
+      text-decoration: none;
+      text-overflow: ellipsis;
+      flex-shrink: 0;
+    }
+
+    .button {
+      align-self: flex-end;
+      width: fit-content;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #388eff;
+      color: #fff;
+      font-family: system-ui, sans-serif;
+      cursor: pointer;
+      user-select: none;
+      text-transform: uppercase;
+      font-weight: 300;
+    }
+
+    #networks {
+      flex-shrink: 1;
+      background: #0001;
+      padding: .5em;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+    #networks.collapse {
+      height: initial;
+    }
+    #networks .button {
+      background: white;
+      color: black;
+      width: auto;
+      align-self: stretch;
+      text-transform: none;
+    }
+    #networks .button:not(:last-child) {
+      margin-bottom: .5em;
+    }
+    #networks .button.selected {
+      outline: #388eff auto 1px;
+    }
+
+    input { background: #0001 }
+    input:focus-visible::placeholder { opacity: 0 }
+
+    label.full {
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      justify-items: stretch;
+      font-weight: bold;
+    }
+    label.full > span {
+      display: block;
+      align-self: flex-start;
+      position: relative;
+      left: -.5em;
+    }
+
+    .hint {
+      font-weight: 300;
+    }
+
+    .input-container {
+      position: relative;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .input-container > input {
+      width: 100%;
+    }
+    .input-container label {
+      position: absolute;
+      width: fit-content; padding: 0 .5em;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1; pointer-events: none;
+      bottom: -.7em;
+      left: 0.5em;
+      background: white; color: black;
+      font-size: .85em;
+      font-style: normal;
+    }
+    .input-container label::before {
+      white-space: pre;
+    }
+    .input-container:focus-within label::before {
+      content: "";
+    }
+    
+    :root {
+      --accent: #e9ffaf;
+      --accent: #fff0af;
+      --accent: #ff8686;
+    }
+    .button, input, #networks {
+      border: 1px solid black;
+      border-radius: 2px;
+      outline: none !important;
+    }
+    .button {
+      background: white;
+      color: black;
+    }
+    #networks {
+      background: none;
+    }
+    #networks .button.selected, .button:active, .button.active {
+      background: var(--accent) !important;
+    }
+    label.active span {
+      box-shadow: 0 2px var(--accent);
+      color: black;
+    }
+    #networks .button:active {
+      background: none !important;
+    }
+    input {
+      background: none;
+    }
+    input.active:not(:focus-visible) {
+      box-shadow: inset 0 0 0 2px var(--accent);
+    }
+    input.active:not(:focus-visible) label {
+      background: var(--accent);
+    }
+    input:focus-visible {
+      outline: none;
+    }
+    input::placeholder, .placeholder {
+      width: 100%; text-align: center;
+      text-transform: uppercase;
+      font-style: italic;
+      font-weight: 300;
+      color: #0005;
+    }
   </style>
   <script>
     const Q = (L, q=undefined) => (q ? L : document.body).querySelector(q || L)
@@ -318,195 +503,6 @@
     }
   }
 </script>
-
-<style>
-  html, body {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    width: 100%;
-    align-items: center;
-    justify-content: center;
-
-    background: white;
-    color: black;
-
-    font-family: system-ui, sans-serif;
-    font-size: 14px;
-    text-align: center;
-  }
-  * { text-align: inherit }
-
-  #container, fieldset {
-    width: calc(100% - 2em);
-    max-width: 400px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: stretch;
-
-    max-height: 24rem;
-  }
-  :is(#container, fieldset) > * {
-    margin-bottom: 1em;
-  }
-
-  .button, input {
-    position: relative;
-    width: auto;
-    display: inline-flex;
-    align-items: center;
-    white-space: pre;
-    box-sizing: border-box;
-    border: 2px;
-    border-radius: 4px;
-    padding: .4em 1em;
-    overflow: hidden;
-    white-space: nowrap;
-    font-size: 1.25em;
-    line-height: 1.5;
-    font-family: inherit;
-    letter-spacing: 0;
-    text-decoration: none;
-    text-overflow: ellipsis;
-    flex-shrink: 0;
-  }
-
-  .button {
-    align-self: flex-end;
-    width: fit-content;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: #388eff;
-    color: #fff;
-    font-family: system-ui, sans-serif;
-    cursor: pointer;
-    user-select: none;
-    text-transform: uppercase;
-    font-weight: 300;
-  }
-
-  #networks {
-    flex-shrink: 1;
-    background: #0001;
-    padding: .5em;
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-  }
-  #networks.collapse {
-    height: initial;
-  }
-  #networks .button {
-    background: white;
-    color: black;
-    width: auto;
-    align-self: stretch;
-    text-transform: none;
-  }
-  #networks .button:not(:last-child) {
-    margin-bottom: .5em;
-  }
-  #networks .button.selected {
-    outline: #388eff auto 1px;
-  }
-
-  input { background: #0001 }
-  input:focus-visible::placeholder { opacity: 0 }
-
-  label.full {
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    justify-items: stretch;
-    font-weight: bold;
-  }
-  label.full > span {
-    display: block;
-    align-self: flex-start;
-    position: relative;
-    left: -.5em;
-  }
-
-  .hint {
-    font-weight: 300;
-  }
-
-  .input-container {
-    position: relative;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .input-container > input {
-    width: 100%;
-  }
-  .input-container label {
-    position: absolute;
-    width: fit-content; padding: 0 .5em;
-    display: flex; align-items: center; justify-content: center;
-    z-index: 1; pointer-events: none;
-    bottom: -.7em;
-    left: 0.5em;
-    background: white; color: black;
-    font-size: .85em;
-    font-style: normal;
-  }
-  .input-container label::before {
-    white-space: pre;
-  }
-  .input-container:focus-within label::before {
-    content: "";
-  }
-</style>
-
-<style>
-  :root {
-    --accent: #e9ffaf;
-    --accent: #fff0af;
-    --accent: #ff8686;
-  }
-  .button, input, #networks {
-    border: 1px solid black;
-    border-radius: 2px;
-    outline: none !important;
-  }
-  .button {
-    background: white;
-    color: black;
-  }
-  #networks {
-    background: none;
-  }
-  #networks .button.selected, .button:active, .button.active {
-    background: var(--accent) !important;
-  }
-  label.active span {
-    box-shadow: 0 2px var(--accent);
-    color: black;
-  }
-  #networks .button:active {
-    background: none !important;
-  }
-  input {
-    background: none;
-  }
-  input.active:not(:focus-visible) {
-    box-shadow: inset 0 0 0 2px var(--accent);
-  }
-  input.active:not(:focus-visible) label {
-    background: var(--accent);
-  }
-  input:focus-visible {
-    outline: none;
-  }
-  input::placeholder, .placeholder {
-    width: 100%; text-align: center;
-    text-transform: uppercase;
-    font-style: italic;
-    font-weight: 300;
-    color: #0005;
-  }
-</style>
 
 </body>
 

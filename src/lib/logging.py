@@ -129,7 +129,7 @@ def info(*r, **k): root.info(*r, **k)
 def warning(*r, **k): root.warning(*r, **k)
 def error(*r, **k): root.error(*r, **k)
 def critical(*r, **k): root.critical(*r, **k)
-def exception(e, msg='', *r, **k): root.exception(e, *r, **k)
+def exception(e, msg='', *r, **k): root.exception(e, msg, *r, **k)
 
 class log:
     def __init__(self, *r, **k): info(*r, **k)

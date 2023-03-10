@@ -13,7 +13,7 @@ class Store:
     store=store
     def read(data: dict, store=store):
         # read data keys out of store
-        for k in data:
+        for k in (data if data else store):
             if k in store:
                 v = store[k]
                 if type(v) is dict and type(data[k]) is dict:
@@ -34,6 +34,7 @@ class Store:
             is_dict = has_k and type(store[k]) is dict
             if write_dict and is_dict: Store.write(v, store[k])
             elif has_k and not (v is None or store[k] is None) and is_dict != write_dict: pass
+            elif v is None: del store[k]
             else: store[k] = v
             log.debug('store write', k, v, k in store and store[k])
 

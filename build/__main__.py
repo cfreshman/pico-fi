@@ -88,6 +88,8 @@ try:
     help='wireless network as name:password')
   parser.add_argument('--no-wait', action='store_true',
     help='skip waits between commands')
+  parser.add_argument('-M', '--no-minify', action='store_true',
+    help="skip minification for --auto builds (to preserve line numbers)")
   parser.add_argument('PACKS', nargs='*')
 
   args = parser.parse_args()
@@ -98,6 +100,7 @@ try:
   if args.auto:
     args.watch = args.minify = True
     if not args.sync: args.sync = True
+    if args.no_minify: args.minify = False
   if args.sync:
     # Check for board mounted with BOOTSEL
     rpi_mount_dir = os.popen(f"""
@@ -183,11 +186,11 @@ try:
       # Copy src/packs/<name>/* to out/packs
       # Copy src/packs/<name>/public/* to out/public
       # Write module list to out/packs/__init__.py
-      written = set()
       potential_conflicts = set()
-      for (name, walk) in [
-        ('src', os.walk('src')),
-        *(('packs', os.walk(f'src/packs/{x}')) for x in args.packs or [])]:
+      index_compilation = []
+      for (pack, name, walk) in [
+        (None, 'src', os.walk('src')),
+        *((x, 'packs', os.walk(f'src/packs/{x}')) for x in args.packs or [])]:
         for root, dirs, files in walk:
           if 'src' == name and 'packs' in root: continue
           for file in files:
@@ -202,18 +205,79 @@ try:
               build_path = src_path.replace('src', 'build/out')
               try: build_modified = os.path.getmtime(build_path)
               except Exception as e: build_modified = 0
+            build_dir = build_path.replace(file, '')
+            index_page = pack and build_path == 'build/out/public/index.html'
+            if index_page: index_compilation.append([pack, src_path])
             if build_modified < src_modified:
               print(src_path, '->', build_path)
-              build_dir = build_path.replace(file, '')
-              if name != 'src':
+              if name != 'src' and not index_page:
                 if build_path in potential_conflicts:
-                  raise f'pack path conflict: {build_path}'
+                  raise Exception(f'pack path conflict: {build_path}')
                 else:
                   potential_conflicts.add(build_path)
               os.system(f"""
               mkdir -p {build_dir} && cp -rf {src_path} {build_dir}
               """)
-              written.add(build_path)
+      
+      if len(index_compilation) > 1:
+        print('\nGenerating compiled index for multiple packs')
+        # Compile index page for multiple packs
+        # Copy packs as public/<pack name>.html (to preserve relative links)
+        build_dir = 'build/out/public/'
+        os.system(f"""
+        mkdir -p {build_dir}
+        """)
+        links = []
+        for (pack, src_path) in index_compilation:
+          file_name = f'./{pack}.html'
+          links.append([pack, file_name])
+          os.system(f"""
+          cp -rf {src_path} {build_dir}{file_name}
+          """)
+        links_html = '\n'.join(
+          f'<a href="{href}">{pack}</a>' for (pack, href) in links)
+        html_root = """
+        <div>[ installed packs ]</div>
+        <br/>
+        <div style="
+        display: flex;
+        flex-direction: column;
+        ">
+          %s
+        </div>
+        <style>
+        #root a {
+          padding: 0.5em;
+          margin-bottom: 0.5em;
+          font-size: 1.2em;
+          background: #ff8686;
+          border-radius: 2px;
+          color: black;
+          border: 0.1em solid black;
+          text-decoration: none;
+          text-align: left;
+          display: flex;
+          justify-content: space-between;
+        }
+        #root a::after {
+          content: " →";
+          margin-left: 1em;
+          transition: .1s;
+          pointer-events: none;
+        }
+        #root a:hover::after {
+          translate: 2em 0;
+          color: black;
+          transition: .33s;
+        }
+        </style>
+        """ % (links_html)
+        
+        html = None
+        with open('build/empty.html') as f: html = f.read()
+        if html:
+          html = html.replace('%ROOT%', html_root)
+          with open('build/out/public/index.html', 'w') as f: f.write(html)
 
       packs_path = 'build/out/packs/__init__.py'
       os.makedirs(re.sub(r'/[^/]+$', '', packs_path), exist_ok=True)
@@ -276,12 +340,13 @@ try:
             cp -rf {filepath} {sync_filepath}
             """)
 
-          print('\nRestarting device')
           rshell(f'rsync build/sync /{args.sync}', 60)
-          if restart: 
-            try: rshell('repl ~ machine.reset() ~', 1, True)
-            except: pass # expected
-          time.sleep(5)
+
+          print('\nRestarting device')
+          # if restart: 
+          #   try: rshell('repl ~ machine.reset() ~', 1, True)
+          #   except: pass # expected
+          # time.sleep(5)
           process = subprocess.Popen(
             ('rshell', 'repl ~ machine.soft_reset()' if restart else 'repl'),
             stderr=None)

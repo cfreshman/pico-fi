@@ -1,8 +1,6 @@
 """
 Basic module configuration showcase
-
-Enable & install on Pico:
-$ python3 build --packs hello-world --sync
+$ python3 build -a hello-world
 """
 from lib.logging import log
 from pico_fi import App

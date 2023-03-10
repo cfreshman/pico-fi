@@ -6,7 +6,6 @@ import gc
 import json
 import select
 import time
-import os
 
 import network
 import uasyncio
@@ -251,7 +250,6 @@ class App:
     get and set query with single param data=<JSON>
     """
     def _parse_data_from_query(self, query):
-        log.debug(query.get('data', '{}'))
         return { 'data': json.loads(query.get('data', '{}')) }
 
     def get(self, req: HTTP.Request, res: HTTP.Response):
