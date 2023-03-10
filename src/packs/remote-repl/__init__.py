@@ -1,4 +1,4 @@
-import os, re, io, sys, _thread, time
+import os, re, _thread, time
 
 from lib.handle.http import HTTP
 from lib.handle.ws import WebSocket
@@ -25,14 +25,16 @@ except: pass
 
 def configure(app: App):
 
-  @app.event('interrupt')
-  def interrupt(msg: WebSocket.Message):
-    global _interrupt_lock, _interrupt_ids
-    if msg.content:
-      log.info('interrupt', msg.content)
-      _interrupt_lock.acquire()
-      _interrupt_ids.add(msg.s_id)
-      _interrupt_lock.release()
+  # TODO re-enable interrupts after debugging background thread issues
+  # (unable to accept additional requests even after first REPL completes)
+  # @app.event('interrupt')
+  # def interrupt(msg: WebSocket.Message):
+  #   global _interrupt_lock, _interrupt_ids
+  #   if msg.content:
+  #     log.info('interrupt', msg.content)
+  #     _interrupt_lock.acquire()
+  #     _interrupt_ids.add(msg.s_id)
+  #     _interrupt_lock.release()
 
   @app.route('/repl')
   def repl(req: HTTP.Request, res: HTTP.Response):
@@ -41,6 +43,8 @@ def configure(app: App):
     
     socket_id = int(req.socket_id or 0)
     log.info('REPL with socket', socket_id)
+    socket_id and app.websocket.emit('repl begin', socket_id=socket_id)
+
     outputs = []
     def _print(*a, log=True, **k):
       line = str_print(*a, **({ 'end': '\n' } | k))
@@ -53,6 +57,7 @@ def configure(app: App):
       _interrupt_lock.acquire()
       if socket_id in _interrupt_ids:
         _interrupt_ids.remove(socket_id)
+        app.websocket.emit('interrupted', socket_id=socket_id)
         raise KeyboardInterrupt('REPL interrupt')
     def _resolve():
       added = set(app.routes.keys()) - routes
@@ -105,16 +110,19 @@ def configure(app: App):
       _repl_locals['app'] = app
       routes = set(app.routes.keys())
 
-      def exec_thread():
-        try: exec(command, globals() | { 'print': _print }, _repl_locals)
-        except Exception as e:
-          log.exception(e)
-          _print('error:', repr(e), log=False)
-        _resolve()
-        _thread.exit()
-      res.fork(exec_thread)
+      # def exec_thread():
+      #   try: exec(command, globals() | { 'print': _print }, _repl_locals)
+      #   except Exception as e:
+      #     log.exception(e, 'REPL inner')
+      #     _print('error:', repr(e), log=False)
+      #   _resolve()
+      #   log.info('REPL thread completed')
+      # res.fork(exec_thread)
+      exec(command, globals() | { 'print': _print }, _repl_locals)
+      _resolve()
+      
     except Exception as e:
-      log.exception(e)
+      log.exception(e, 'REPL outer')
       _print('error:', repr(e), log=False)
       _resolve()
 

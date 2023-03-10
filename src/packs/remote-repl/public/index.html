@@ -563,7 +563,21 @@
       }
       return { html }
     }
-    let ws, ws_id, _active_repl = false, _logged = false
+    let _repl_active, _repl_incremental
+    const _beginRun = (incremental_log) => {
+      console.debug('BEGIN RUN')
+      commands['run'].disabled = true
+      _repl_active = true
+      _repl_incremental = incremental_log
+    }
+    const _completeRun = () => {
+      console.debug('COMPLETE RUN')
+      _repl_active = false
+      _repl_incremental = false
+      action()
+      commands['run'].disabled = false
+    }
+    let ws, ws_id
     const connectWebSocket = () => {
       ws = new WebSocket(`ws://${location.host}`)
       ws.onopen = e => ws.send('connect')
@@ -571,17 +585,14 @@
         const [type, data] = e.data.split(/ (.*)/)
         console.debug('WebSocket:', type, data)
         switch (type) {
-          case 'log':
-            _parseBoard(data)
-            log(_parseLinks(data || '', true), _active_repl)
-            _logged = _active_repl
-            break
           case 'repl':
             const [_type, _data] = data.split(/ (.*)/)
-            if (_type === 'complete') {
-              _active_repl = false
-              log(false, false)
-            }
+            if (_type === 'begin') _beginRun(incremental_log=true)
+            else if (_type === 'complete') _completeRun()
+            break
+          case 'log':
+            _parseBoard(data)
+            log(_parseLinks(data || '', true), _repl_active)
             break
           case 'command':
             action('run', data, false, true)
@@ -599,10 +610,7 @@
     let i = 0
     const logged = async (url, force=false) => {
       console.debug('LOGGED', url)
-      commands['run'].disabled = true
-
-      _active_repl = true
-      _logged = false
+      _beginRun(incremental_log=false)
       return fetch(url, {
         headers: {
           ...(ws_id ? {'X-Pico-Fi-Socket-Id': ws_id} : {}),
@@ -610,22 +618,17 @@
       })
       .then(res => res.text())
       .then(text => {
-        if (_logged && _active_repl) return // wait for WebSocket 'repl complete'
-
+        if (_repl_incremental && _repl_active) return // wait for WebSocket 'repl complete'
         console.debug('REPL RESULT', text)
         _parseBoard(text)
-        log(!_logged && _parseLinks(text))
-        _active_repl = false
+        log(!_repl_incremental && _parseLinks(text))
+        _completeRun()
         return text
       })
       .catch(async error => {
         await new Promise(resolve => setTimeout(resolve, 1000))
         log(error)
-        return Promise.resolve('')
-      })
-      .finally(() => {
-        action()
-        commands['run'].disabled = false
+        _completeRun()
       })
     }
     const command = (text, expanded=false, history=true) => {
