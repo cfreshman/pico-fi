@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>pico-cpu-temp</title>
+  <link rel="icon" href="/icon.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8">
+  <style>
+    html, body, #root {
+      height: 100%; width: 100%; font-family: system-ui; margin: 0;
+    }
+    #root {
+      margin: .5em;
+      width: calc(100% - 1em);
+      flex-grow: 1;
+      display: flex; flex-direction: column;
+    }
+  </style>
+  <script>
+    const Q = (L, q=undefined) => (q ? L : document.body).querySelector(q || L)
+    const QQ = (L, q=undefined) => Array.from((q ? L : document.body).querySelectorAll(q || L))
+
+    const _persist = (method, data={}) =>
+      fetch(`/${method}?data=${encodeURIComponent(JSON.stringify(data))}`)
+      .then(res => res.json())
+      .then(({ data }) => {
+        console.debug(method, 'result:', data)
+        return data
+      })
+    const get = data => _persist('get', data) // query with desired fields: { 'abc': true, 'foor': true }
+    const set = data => _persist('set', data) // respond with updated values: { 'abc': 123, 'foor': 'bar' }
+  </script>
+</head>
+<body>
+
+  <div id="root">
+    <div>
+      <b>pico-cpu-temp</b>&nbsp;&nbsp;<i>CPU temperature reading</i>
+      <span style="float:right;font-size:.85em">[ <a style="color:#ff8686" href="/portal">back to network selection</a> ]</span>
+    </div>
+    
+    <div id="readings" style="white-space: pre">(empty)</div>
+    <script>
+      const readings = Q('#readings')
+      setTimeout(async () => {
+        for (let i = 0;; i++) {
+          const reading = await fetch('/cpu-temperature').then(res => res.text())
+          readings.textContent = reading + '\n' + (i > 0 ? readings.textContent : '')
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        }
+      })
+    </script>
+  </div>
+
+</body>
+</html>

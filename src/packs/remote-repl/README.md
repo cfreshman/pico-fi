@@ -16,7 +16,8 @@ Run MicroPython commands on your Pico W, wirelessly
 
 pico-fi's `app` is exposed as a global variable within the REPL:
 ```
-# Disable pico-fi's on-board LED indicator to use for something else
+# By default pico-fi uses the on-board LED as an indicator for request activity
+# Disable to use for something else
 app.indicator = None
 
 # Add a route

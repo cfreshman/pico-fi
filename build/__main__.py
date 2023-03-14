@@ -117,8 +117,12 @@ try:
         "Install MicroPython for Pico W? [Y/n] ") or 'y'
       if mp_response.lower()[0] == 'y':
         wait_from = time.time()
+        if os.popen(f'[ -f build/micropython.uf2 ] || echo n').read().strip():
+          os.system(f"""
+          curl http://micropython.org/download/rp2-pico-w/rp2-pico-w-latest.uf2 > build/micropython.uf2
+          """)
         os.system(f"""
-        curl http://micropython.org/download/rp2-pico-w/rp2-pico-w-latest.uf2 > {rpi_mount_dir}/m.uf2
+        cp build/micropython.uf2 {rpi_mount_dir}/
         """)
         print(
           'MicroPython installed, waiting for Pico to disconnect and restart')
@@ -174,11 +178,10 @@ try:
         os.system(f"""
         mkdir -p build/save
         """)
-        rshell(f'cp /{args.sync}/board.py build/save/')
-        rshell(f'cp /{args.sync}/store.json build/save/')
-        rshell(f'cp /{args.sync}/network.json build/save/')
+        for save in ['board.py', 'store.json', 'network.json']:
+          rshell(f'cp /{args.sync}/{save} build/save/')
         rshell(f'rm -rf /{args.sync}')
-        rshell(f'cp build/save/* /{args.sync}')
+        rshell(f'cp build/save/* /pyboard')
         os.system('rm -rf build/sync')
 
       # Only copy new files & changes to avoid excessive rsync
@@ -309,7 +312,7 @@ try:
             print('Writing network credentials:', ssid, key)
             with open(f'{sync_dir}/network.json', 'w') as f:
               f.write(json.dumps({ 'ssid': ssid, 'key': key }))
-          
+
           # Only sync changed files
           os.system(f'mkdir -p build/sync')
           diff_output = os.popen(f'diff -qr {sync_dir} build/sync').read()

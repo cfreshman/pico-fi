@@ -3,6 +3,7 @@ miscellaneous utilities
 """
 import io
 from random import choice
+import re
 
 class enum:
     def __init__(self, value): self.value = value
@@ -108,6 +109,15 @@ def delimit(str, n, sep):
     """add delimiter to string between groups of n tokens"""
     return sep.join(part(str, n))
 
+def coroutine(func):
+    """
+    name async functions starting with async_ to detect here & await properly
+    (hacky. I haven't found a better option)
+    """
+    if 'async_' in func.__name__: return func
+    async def async_func(*a, **k): return func(*a, **k)
+    return async_func
+def fork(func): uasyncio.create_task(coroutine(func)())
 
 class MergedReadInto:
     """merge multiple str / bytes / IO streams into one"""

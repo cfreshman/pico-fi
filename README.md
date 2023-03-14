@@ -4,10 +4,8 @@ A MicroPython webserver framework for the Pico W with a captive portal for wirel
 
 > **Quickstart** Hold BOOTSEL & plug in Pico W  
 > ```sh
-> curl http://micropython.org/download/rp2-pico-w/rp2-pico-w-latest.uf2 > $([ $(uname) == Darwin ] && echo /Volumes || echo /media/$USER)/RPI-RP2/m.uf2
-> pip3 install rshell
-> git clone https://github.com/cfreshman/pico-fi
-> cd pico-fi && python3 build -a --packs remote-repl
+> git clone https://github.com/cfreshman/pico-fi && cd pico-fi
+> python3 build -a --packs remote-repl
 > ```
 > Then connect to `w-pico` (password: `pico1234`)  
 > See [packs/remote-repl](./src/packs/remote-repl/) for examples

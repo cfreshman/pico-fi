@@ -91,6 +91,10 @@ class WebSocket(ProtocolHandler):
                 log.info('WebSocket send', id(sock), WS.Opcode.name(opcode))
                 self.io.send(sock, opcode, message)
                 sent = True
+                # write & read immediately
+                log.info('WebSocket flush and read')
+                while not self.io.write(sock): pass
+                self.read(sock)
             except Exception as e:
                 log.exception(e)
                 self.conns.remove(connection.of(sock))
@@ -103,8 +107,8 @@ class WebSocket(ProtocolHandler):
         if opcode == WS.Opcode.PING: self.io.send(sock, WS.Opcode.PONG)
         if data:
             msg = WebSocket.Message(self, sock, opcode, data)
-            log.info('WebSocket read', msg)
             handler = self.events.get(msg.type, None)
+            log.info('WebSocket read', msg, handler)
             if not handler:
                 if msg.type == b'connect':
                     self.emit('connected', msg.s_id, socket_id=msg.s_id)

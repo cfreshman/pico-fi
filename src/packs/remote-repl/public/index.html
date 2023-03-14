@@ -223,7 +223,7 @@
       setInputValue(run_history[run_history_index])
       ">next</button>
       <button onclick="
-      const file_input = node(`<input type='file' accept='.py, .txt, .'/>`)
+      const file_input = node(`<input type='file' accept='.py, .txt'/>`)
       file_input.click()
       file_input.onchange = e => {
         if (e.target.files.length) {
@@ -254,14 +254,18 @@
     ">authorize</button> -->
     <span id="saved" style="font-size:.7em"></span>
     <div style="float:right">
-      <label>
+      <label id="wrap">
         wrap&nbsp;<input
         type="checkbox"
-        checked="true"
+        checked="false"
         onchange="
         output.style.whiteSpace = event.target.checked ? 'pre-wrap' : 'pre'
+        localStorage.setItem('pico-remote-repl-wrap', event.target.checked)
         " />
       </label>
+      <script>
+        Q('#wrap').value = localStorage.getItem('pico-remote-repl-wrap')
+      </script>
       &nbsp;&nbsp;
       <select id="select-theme" style="width:6.5em"
       onchange="
@@ -302,6 +306,71 @@
     font-size: 1em;
     line-height: inherit;
     "></p>
+    <script>
+      const editorKeyDown = event => {
+        let start = event.target.selectionStart
+        for (let i = 0; i < 3; i++, start--) {
+          if (start <= 0) {
+            event.target.selectionStart = 2
+            if (event.key === 'Backspace') {
+              if (event.target.selectionEnd === event.target.selectionStart) {
+                return event.preventDefault()
+              }
+            }
+            break
+          }
+          if (event.target.value[start - 1] === '\n') {
+            if (event.key === 'Backspace') {
+              event.target.selectionStart = start - 1
+            } else {
+              event.target.selectionStart = start + 2
+            }
+            break
+          }
+        }
+
+        const value = history[history_index] = event.target.value
+          .split('\n')
+          .map(x => x.replace(/^([$|] )+/, ''))
+          .join('\n')
+        if (event.key === 'Enter') {
+          if (event.shiftKey) {
+            const cursor = event.target.selectionStart
+            let start = cursor
+            
+            let text = value
+            while (start && text[start] !== '\n') start -= 1
+            const line = text.slice(start + 1, cursor).replace(/^\| /, '')
+            if (line.trim()) {
+              event.preventDefault()
+              const indentMatch = /^\s*/.exec(line)
+              const openerMatch = /[:\{]\s*$/.exec(line)
+              const indent = '\n| ' + (indentMatch[0] || '') + (colonMatch ? '  ' : '')
+              text = text.slice(0, cursor) + indent + text.slice(cursor)
+              event.target.value = text
+              event.target.selectionStart = cursor + indent.length
+            }
+          } else {
+            event.preventDefault()
+            command(value)
+          }
+        } else if (event.key === 'ArrowUp') {
+          if (history_index > 0) {
+            history_index -= 1
+            event.target.value = event.target.value.slice(0, 2) + history[history_index]
+            setTimeout(() => event.target.selectionStart = event.target.value.length)
+          }
+        } else if (event.key === 'ArrowDown') {
+          if (history_index < history.length - 1) {
+            history_index += 1
+            event.target.value = event.target.value.slice(0, 2) + history[history_index]
+            setTimeout(() => event.target.selectionStart = event.target.value.length)
+          }
+        }
+        event.target.style.minHeight = `${event.target.value.split('\n').length * 1.1 + .5}em`
+        setTimeout(() => output.scrollTop = output.scrollHeight)
+      }
+    </script>
     <textarea
     style="
     -webkit-appearance: none;
@@ -325,82 +394,7 @@
     event.target.style.minHeight = `${event.target.value.split('\n').length * 1.1 + .5}em`
     setTimeout(() => output.scrollTop = output.scrollHeight)
     "
-    onkeydown="
-    let start = event.target.selectionStart
-    for (let i = 0; i < 3; i++, start--) {
-      if (start <= 0) {
-        event.target.selectionStart = 2
-        if (event.key === 'Backspace') {
-          if (event.target.selectionEnd === event.target.selectionStart) {
-            return event.preventDefault()
-          }
-        }
-        break
-      }
-      if (event.target.value[start - 1] === '\n') {
-        if (event.key === 'Backspace') {
-          event.target.selectionStart = start - 1
-        } else {
-          event.target.selectionStart = start + 2
-        }
-        break
-      }
-    }
-
-    const value = history[history_index] = event.target.value
-      .split('\n')
-      .map(x => x.replace(/^([$|] )+/, ''))
-      .join('\n')
-    if (event.key === 'Enter') {
-      if (event.shiftKey) {
-        const cursor = event.target.selectionStart
-        let start = cursor
-        
-        let text = value
-        while (start && text[start] !== '\n') start -= 1
-        const line = text.slice(start + 1, cursor).replace(/^\| /, '')
-        if (line.trim()) {
-          event.preventDefault()
-          const indentMatch = /^\s*/.exec(line)
-          const colonMatch = /:\s*$/.exec(line)
-          const indent = '\n| ' + (indentMatch[0] || '') + (colonMatch ? '  ' : '')
-          text = text.slice(0, cursor) + indent + text.slice(cursor)
-          event.target.value = text
-          event.target.selectionStart = cursor + indent.length
-        }
-      } else {
-        event.preventDefault()
-        log(
-          trim_newlines(value)
-            .split('\n')
-            .map((x,i) => ((i ? '| ' : '$ ')+x).replace(/^([$|] )+/, '$1'))
-            .join('\n'),
-          waiting=true)
-        logged(`/repl?${new URLSearchParams({
-          command: encodeURIComponent(value)
-        }).toString()}`)
-        history_index = history.length
-        history[history_index - 1] = value
-        history.push('')
-      }
-    } else if (event.key === 'ArrowUp') {
-      if (history_index > 0) {
-        history_index -= 1
-        event.target.value = event.target.value.slice(0, 2) + history[history_index]
-        setTimeout(() => event.target.selectionStart = event.target.value.length)
-      }
-    } else if (event.key === 'ArrowDown') {
-      if (history_index < history.length - 1) {
-        history_index += 1
-        event.target.value = event.target.value.slice(0, 2) + history[history_index]
-        setTimeout(() => event.target.selectionStart = event.target.value.length)
-      }
-    } else if (event.key === 'c' && event.ctrlKey) {
-      ws.send('interrupt')
-    }
-    event.target.style.minHeight = `${event.target.value.split('\n').length * 1.1 + .5}em`
-    setTimeout(() => output.scrollTop = output.scrollHeight)
-    "
+    onkeydown="editorKeyDown(event)"
     ></textarea>
   </div>
   <script>
@@ -434,7 +428,7 @@
       _highlight()
     }
     const logs = [{
-      text: 'pico-fi-repl 1.0.1',
+      text: 'pico-fi-repl 1.0.3',
     }]
     const output = document.querySelector('#output')
     const output_text = output.querySelector('p')
@@ -451,11 +445,12 @@
       if (lastLog?.action === 'run' && item?.action === 'run') logs.splice(-1, 1)
       if (waiting) logs.push({ html: `<span style="
       color: #0f8;
-      "><div class="loader"></div> waiting for result from ${board_name || 'Pico W'}</span>`, waiting })
+      "><div class="loader"></div> ${_repl_incremental ? `listening for output from ${board_name || 'Pico W'}, ^C to <a onclick="ws.send('interrupt')">interrupt</a>` : `waiting for result from ${board_name || 'Pico W'}`}</span>`, waiting })
       const elements = logs
         .map(x => {
-          if (x instanceof Error || (x?.includes && x.includes('error:'))) {
-            return node(`<div style="color:#f44">${x.toString()}</div>`)
+          const str = x.html || x.text || x.toString()
+          if (x instanceof Error || (typeof(str) === 'string' && /error|interrupt/i.test(str))) {
+            return node(`<div style="color:#f44">${str}</div>`)
           } else if (x && (typeof x === 'string' || x.text)) {
             return trim_newlines(x.text || x) + '\n'
           } else if (x && x.html) {
@@ -500,7 +495,7 @@
         }${
           board_name ? board_name : '<i>unable to connect</i>'
         }</span> <span style="color:gray">${new Date().toLocaleTimeString([], { hour12: false })}</span>`
-      } : (expanded ? { html: `<a style="color:#8df">${detail}</a>` } : {
+      } : (expanded ? { html: `<span style="color:#8df">${detail}</span>` } : {
         action: name || 'empty',
         html: `${name?'> '+name:''}${detail ? ` [<a
         onclick="
@@ -551,9 +546,9 @@
       let html
       if (output) {
         const linkRegex =
-          /(^|[^.\w\d\-_:/?=&%#@+\n])((https?:\/\/)?(([\w\d-]+\.)+\w{2,}|localhost)([\w\d\-_:/?=&%#@+]{1,}(?:\.(?! ))?){1,})/gim
+          /(^|[^.\w\d\-_:/?=&%#@+\n<])((https?:\/\/)?(([\w\d-]+\.)+\w{2,}|localhost)([\w\d\-_:/?=&%#@+]{1,}(?:\.(?! ))?){1,})/gim
         const internalLinkRegex =
-          /(^|[^.\w\d\-_:/?=&%#@+\n])([/?](?:[\w\d\-_:/?=&%#@+.]{1,}[\w\d\-_]{1,}(?:\.(?! ))?){1,})/gim
+          /(^| )([/?](?:[\w\d\-_:/?=&%#@+.]{1,}[\w\d\-_]{1,}(?:\.(?! ))?){1,})/gim
         html = output
         .replace(linkRegex, '$1<a href="http://$2" target="_blank" rel="noreferrer">$2</a>')
         .replace('http://http', 'http')
@@ -567,13 +562,12 @@
     const _beginRun = (incremental_log) => {
       console.debug('BEGIN RUN')
       commands['run'].disabled = true
-      _repl_active = true
       _repl_incremental = incremental_log
+      _repl_active = true
     }
     const _completeRun = () => {
       console.debug('COMPLETE RUN')
       _repl_active = false
-      _repl_incremental = false
       action()
       commands['run'].disabled = false
     }
@@ -618,10 +612,10 @@
       })
       .then(res => res.text())
       .then(text => {
-        if (_repl_incremental && _repl_active) return // wait for WebSocket 'repl complete'
+        if (_repl_incremental) return // wait for WebSocket 'repl complete'
         console.debug('REPL RESULT', text)
         _parseBoard(text)
-        log(!_repl_incremental && _parseLinks(text))
+        log(_parseLinks(text))
         _completeRun()
         return text
       })
@@ -637,7 +631,11 @@
       action('run', text, expanded, true, history)
       
       return logged(`/repl?${new URLSearchParams({
-        command: encodeURIComponent(text),
+        command: encodeURIComponent(
+          text
+          .split('\n')
+          .map((x,i) => x.replace(/^([$|] )+/, ''))
+          .join('\n')),
         ...(history ? { run_option: run_option_select.value } : {}),
       }).toString()}`)
     }
@@ -648,12 +646,8 @@
   
 abc()
 `)
-    command(`
-try:
-  with open('board.py') as f: print(f.read())
-except: print('name = "pyboard"')
-import os
-print(os.uname())`, false, false)
+    command(`import os
+with open('board.py', '+') as f: print(f.read() or 'name = "pyboard"', os.uname())`, true, false)
 
     const theme_select = document.querySelector('#select-theme')
     const theme_sheet = document.querySelector('#syntax-highlighting')
@@ -707,6 +701,9 @@ print(os.uname())`, false, false)
         localStorage.setItem(VALUE_KEY, input.value)
         document.querySelector('#saved').textContent = 'saved'
         setTimeout(() => document.querySelector('#saved').textContent = '', 3000)
+      } else if (event.key === 'c' && event.ctrlKey) {
+        console.debug('INTERRUPT')
+        ws.send('interrupt')
       }
     }))
   </script>

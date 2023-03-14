@@ -7,13 +7,12 @@ import select
 import socket
 from collections import namedtuple
 import re
-import _thread
 import micropython
 
 from lib.handle.ws import WebSocket
 from lib.stream.tcp import TCP
-from lib import encode, unquote
-from lib.logging import cmt, log
+from lib import encode, unquote, fork
+from lib.logging import comment, log
 from lib.server import Orchestrator, Protocol, Server, connection, IpSink
 
 
@@ -24,6 +23,13 @@ class HTTP(Server):
 
     NL = b'\r\n'
     END = NL + NL
+
+    class Method:
+        GET = 'GET'
+        POST = 'POST'
+        PUT = 'PUT'
+        DELETE = 'DELETE'
+        HEAD = 'HEAD'
 
     class ContentType:
         class Value:
@@ -118,8 +124,7 @@ class HTTP(Server):
 
         def fork(self, func):
             self.sent = True
-            _thread.stack_size(8 * 1024)
-            _thread.start_new_thread(func, ())
+            fork(func)
 
 
     def __init__(self, orch: Orchestrator, ip_sink: IpSink, routes: dict[bytes, bytes or function]):
@@ -177,14 +182,14 @@ class HTTP(Server):
         return HTTP.Request(host, req_type, path, raw_query, query, headers, body_bytes, socket_id)
 
     def parse_route(self, req: Request):
-        log.info(req.path.split(b'/'))
         prefix = b'/'+(req.path.split(b'/')+[b''])[1]
+        log.debug('HTTP PARSE ROUTE', prefix, self.routes.get(prefix, None), self.routes)
         return (req.host == self.ip or not self.ip_sink.get()) and self.routes.get(prefix, None)
     def handle_request(self, sock, req: Request):
         """respond to an HTTP request"""
 
         if WebSocket.KeyHeader in req.headers:
-            cmt('upgrade HTTP to WebSocket')
+            comment('upgrade HTTP to WebSocket')
             self.ws_upgrades.add(connection.of(sock))
             self.prepare(sock, WebSocket.get_http_upgrade_header(req.headers[WebSocket.KeyHeader]))
             return
@@ -228,7 +233,7 @@ class HTTP(Server):
                 # we upgraded this to a WebSocket, switch handler but keep open
                 self.orch.register(conn, Protocol.WebSocket)
                 self.poller.register(sock, select.POLLIN) # switch back to read
-                cmt('upgraded HTTP to WebSocket')
+                comment('upgraded HTTP to WebSocket')
                 self.tcp.clear(sock)
                 self.ws_upgrades.remove(conn)
             else:

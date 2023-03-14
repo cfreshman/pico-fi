@@ -36,6 +36,7 @@ def str_print(*args, **kwargs):
 
 
 class AtomicPrint:
+    """print sequentially from multiple threads"""
     _lock = uasyncio.Lock()
     _loop = uasyncio.get_event_loop()
     _tasks = []
@@ -52,12 +53,8 @@ class AtomicPrint:
     def flush():
         AtomicPrint._loop.run_until_complete(uasyncio.gather(*AtomicPrint._tasks))
 
-
-def atomic_print(*args, **kwargs):
-    AtomicPrint.print(*args, **kwargs)
-
-def flush():
-    AtomicPrint.flush()
+def atomic_print(*args, **kwargs): AtomicPrint.print(*args, **kwargs)
+def flush(): AtomicPrint.flush()
 
 
 rtc = machine.RTC()
@@ -79,7 +76,7 @@ class Logger:
         spacer = '\n' * (len(r.message) - len(message))
         if '\n' in message:
             message = '\n  ' + '\n  '.join(message.split('\n'))
-        atomic_print(
+        AtomicPrint.print(
             spacer,
             *['[', r.levelname, r.name and ':'+r.name, '] ', timestamp(), ' '] if message else '',
             message, sep='', file=_stream)
@@ -130,7 +127,6 @@ def warning(*r, **k): root.warning(*r, **k)
 def error(*r, **k): root.error(*r, **k)
 def critical(*r, **k): root.critical(*r, **k)
 def exception(e, msg='', *r, **k): root.exception(e, msg, *r, **k)
-
 class log:
     def __init__(self, *r, **k): info(*r, **k)
     debug = debug
@@ -144,4 +140,4 @@ class log:
     instance = instance
     flush = flush
 
-def cmt(*r, **k): root.info(*r, **k)
+def comment(*r, **k): root.info(*r, **k)
