@@ -14,7 +14,7 @@ from lib.handle.dns import DNS
 from lib.handle.http import HTTP
 from lib.handle.ws import WebSocket
 from lib.stream.ws import WS
-from lib import encode, randlower, delimit, LED
+from lib import encode, randlower, delimit, LED, coroutine
 from lib.logging import cmt, log
 from lib.server import Orchestrator, SocketPollHandler, IpSink
 from lib.store import Store
@@ -82,7 +82,7 @@ class App:
                     log.info('import', f'packs/{pack}')
                     pack_import = __import__(f'packs/{pack}')
                     pack_features = {}
-                    for feature in ['routes', 'configure']:
+                    for feature in ['routes', 'events', 'configure']:
                         if hasattr(pack_import, feature):
                             pack_features[feature] = getattr(
                                 pack_import, feature)
@@ -159,23 +159,13 @@ class App:
         self.websocket = WebSocket(self.orch, self.events)
         self.servers = [
             DNS(self.orch, self.ap_ip),
-            self.websocket,
             HTTP(self.orch, self.ip_sink, self.routes),
+            # HTTP(self.orch, self.ip_sink, self.routes, ssl=True),
+            self.websocket,
         ]
 
-        # start access point
-        # if ID undefined, read previous or generate new
-        STORE_ID_KEY = 'id'
-        if not self.id or isinstance(self.id, int):
-            self.id = Store.get(STORE_ID_KEY, 'w-'+randlower(self.id or 7))
-        self.ap.config(essid=self.id)
-        open('board.py', 'w').write(f'name = "{self.id}"')
-        Store.write({ STORE_ID_KEY: self.id })
-        self.ap.active(True)
-        self.indicator and self.indicator.on()
-        log.info('access point:', self.ap.config('essid'), self.ap.ifconfig())
-
         # scan for other networks
+        self.sta.active(True)
         networks = sorted(self.sta.scan(), key=lambda x: -x[3])
         log.info('found', len(networks), 'networks')
         if networks:
@@ -185,13 +175,37 @@ class App:
                 bssid = delimit(binascii.hexlify(x[1]).decode(), 2, ':')
                 log.info(
                 f'{-x[3]} {ssid_padded} ({bssid}) chnl={x[2]} sec={x[4]} hid={x[5]}')
+
+        # start access point
+        STORE_ID_KEY = 'id'
+        # if ID undefined, read previous or generate new
+        if not self.id or isinstance(self.id, int):
+            self.id = Store.get(STORE_ID_KEY, 'w-'+randlower(self.id or 7))
+        # increment ID while already in use
+        network_ids = [x[0].decode() for x in networks]
+        original_id = self.id
+        i = 0
+        while self.id in network_ids:
+            i += 1
+            self.id = original_id + '-' + i
+        self.ap.config(essid=self.id)
+        open('board.py', 'w').write(f'name = "{self.id}"')
+        Store.write({ STORE_ID_KEY: self.id })
+        self.ap.active(True)
+        self.indicator and self.indicator.on()
+        log.info('access point:', self.ap.config('essid'), self.ap.ifconfig())
         
         while self.effects['start']: self.effects['start'].pop(0)()
 
         # reconnect to last network if one exists
-        self.connect()
+        uasyncio.run(coroutine(self.connect)())
 
-    def connect(self, ssid=None, key=None, wait=True):
+    def connect(
+        self, ssid=None, key=None, wait=True, is_retry=False):
+        """
+        Attempt network connection.
+        If using stored credentials and connection fails, retry once per minute
+        """
         NETWORK_JSON = 'network.json'
         if not ssid:
             try:
@@ -206,19 +220,23 @@ class App:
             network = { 'ssid': ssid, 'key': key }
             log.info('store network login:', network)
             with open(NETWORK_JSON, 'w') as f: f.write(json.dumps(network))
-            
+
         self.sta.active(True)
         self.sta.connect(ssid, key)
         if not wait: return
 
-        # wait up to 10s for connection to succeed
-        wait = 10
+        # wait up to 10s for connection to succeed (or 30s for retry)
+        wait = 30 if is_retry else 10
+        status = None
         while wait > 0:
             wait -= 1
-            status = self.sta.status()
+            newStatus = self.sta.status()
+            # if status != newStatus:
+            status = newStatus
             log.info(f'network connect attempt status', status)
             if 0 <= status < 3: time.sleep(1)
             else: break
+            log.info(f'network connect loop')
 
         if status == 3:
             self.sta_ip = self.sta.ifconfig()[0]
@@ -229,6 +247,11 @@ class App:
         else:
             log.info('network connect failed')
             self.sta.active(False)
+            if not is_retry:
+                log.info(f'will retry connection to {ssid} once per minute')
+                while self.sta.status() != 3:
+                    self.connect(ssid, key, True, True)
+                    time.sleep(60)
 
     def stop(self):
         cmt('stop pico-fi')
@@ -294,7 +317,7 @@ class App:
         res.json(networks)
     def api_network_connect(self, req: HTTP.Request, data, res: HTTP.Response):
         log.info('network connect', data['ssid'], data['key'], binascii.unhexlify(data['bssid']))
-        self.connect(data['ssid'], data['key'], False)
+        uasyncio.run(coroutine(self.connect)(data['ssid'], data['key'], False))
         res.json({ 'status': self.sta.status() })
     def api_network_status(self, req: HTTP.Request, data, res: HTTP.Response):
         status = self.sta.status()
@@ -332,12 +355,14 @@ class App:
         self.start()
         try:
             start = time.time()
+            async def async_handle(response): self.orch.handle(*response)
             while True:
                 # gc between socket events or once per minute
                 gc.collect()
                 for response in self.poller.ipoll(60_000):
                     self.indicator and self.indicator.pulse()
                     self.orch.handle(*response)
+                    # uasyncio.create_task(async_handle(response))
 
                 # write store to file at most once per minute
                 now = time.time()

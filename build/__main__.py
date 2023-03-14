@@ -117,8 +117,12 @@ try:
         "Install MicroPython for Pico W? [Y/n] ") or 'y'
       if mp_response.lower()[0] == 'y':
         wait_from = time.time()
+        if os.popen(f'[ -f build/micropython.uf2 ] || echo n').read().strip():
+          os.system(f"""
+          curl http://micropython.org/download/rp2-pico-w/rp2-pico-w-latest.uf2 > build/micropython.uf2
+          """)
         os.system(f"""
-        curl http://micropython.org/download/rp2-pico-w/rp2-pico-w-latest.uf2 > {rpi_mount_dir}/m.uf2
+        cp build/micropython.uf2 {rpi_mount_dir}/
         """)
         print(
           'MicroPython installed, waiting for Pico to disconnect and restart')
@@ -309,6 +313,12 @@ try:
             print('Writing network credentials:', ssid, key)
             with open(f'{sync_dir}/network.json', 'w') as f:
               f.write(json.dumps({ 'ssid': ssid, 'key': key }))
+          
+          # # Generate SSL cert
+          # if os.popen(f'[ -f {sync_dir}/key.pem ] || echo n').read().strip():
+          #   print('\nGenerating SSL cert for HTTPS')
+          #   os.system(
+          #     f'openssl req -x509 -newkey rsa:4096 -keyout {sync_dir}/key.pem -out {sync_dir}/cert.pem -sha256 -days 365')
           
           # Only sync changed files
           os.system(f'mkdir -p build/sync')

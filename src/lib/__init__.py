@@ -3,6 +3,7 @@ miscellaneous utilities
 """
 import io
 from random import choice
+import re
 
 class enum:
     def __init__(self, value): self.value = value
@@ -108,6 +109,22 @@ def delimit(str, n, sep):
     """add delimiter to string between groups of n tokens"""
     return sep.join(part(str, n))
 
+
+def split_url(url: str):
+    """return proto (or http://), host, and path"""
+    if not 'http' in url: url = 'http://'+url
+    proto, host, path = \
+        re.search(r'([^\/]+\/\/)([^\/]+)\/(.+)', url).groups()
+    return proto, host, path
+
+def coroutine(func):
+    """
+    name async functions starting with async_ to detect here & await properly
+    (hacky. I haven't found a better way to do this)
+    """
+    if 'async_' in func.__name__: return func
+    async def async_func(*a, **k): return func(*a, **k)
+    return async_func
 
 class MergedReadInto:
     """merge multiple str / bytes / IO streams into one"""

@@ -7,12 +7,12 @@ import select
 import socket
 from collections import namedtuple
 import re
-import _thread
 import micropython
+import uasyncio
 
 from lib.handle.ws import WebSocket
 from lib.stream.tcp import TCP
-from lib import encode, unquote
+from lib import encode, unquote, coroutine
 from lib.logging import cmt, log
 from lib.server import Orchestrator, Protocol, Server, connection, IpSink
 
@@ -24,6 +24,13 @@ class HTTP(Server):
 
     NL = b'\r\n'
     END = NL + NL
+
+    class Method:
+        GET = 'GET'
+        POST = 'POST'
+        PUT = 'PUT'
+        DELETE = 'DELETE'
+        HEAD = 'HEAD'
 
     class ContentType:
         class Value:
@@ -118,8 +125,7 @@ class HTTP(Server):
 
         def fork(self, func):
             self.sent = True
-            _thread.stack_size(8 * 1024)
-            _thread.start_new_thread(func, ())
+            uasyncio.create_task(coroutine(func)())
 
 
     def __init__(self, orch: Orchestrator, ip_sink: IpSink, routes: dict[bytes, bytes or function]):
@@ -177,8 +183,8 @@ class HTTP(Server):
         return HTTP.Request(host, req_type, path, raw_query, query, headers, body_bytes, socket_id)
 
     def parse_route(self, req: Request):
-        log.info(req.path.split(b'/'))
         prefix = b'/'+(req.path.split(b'/')+[b''])[1]
+        log.debug('HTTP PARSE ROUTE', prefix, self.routes.get(prefix, None), self.routes)
         return (req.host == self.ip or not self.ip_sink.get()) and self.routes.get(prefix, None)
     def handle_request(self, sock, req: Request):
         """respond to an HTTP request"""

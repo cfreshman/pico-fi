@@ -110,16 +110,14 @@ def configure(app: App):
       _repl_locals['app'] = app
       routes = set(app.routes.keys())
 
-      # def exec_thread():
-      #   try: exec(command, globals() | { 'print': _print }, _repl_locals)
-      #   except Exception as e:
-      #     log.exception(e, 'REPL inner')
-      #     _print('error:', repr(e), log=False)
-      #   _resolve()
-      #   log.info('REPL thread completed')
-      # res.fork(exec_thread)
-      exec(command, globals() | { 'print': _print }, _repl_locals)
-      _resolve()
+      def exec_repl():
+        try: exec(command, globals() | { 'print': _print }, _repl_locals)
+        except Exception as e:
+          log.exception(e, 'REPL inner')
+          _print('error:', repr(e), log=False)
+        _resolve()
+        log.info('REPL completed')
+      res.fork(exec_repl)
       
     except Exception as e:
       log.exception(e, 'REPL outer')

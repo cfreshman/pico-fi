@@ -7,7 +7,7 @@ Press BOOTSEL to turn off
 (You can use this as a physical notification system or daily reminder)
 """
 
-import time, urequests
+import time, urequests, uasyncio
 from pico_fi import App
 from lib import LED
 from lib.logging import log
@@ -60,7 +60,7 @@ def configure(app: App):
 
     log.info('(SYNC endpoint) attempting to', SYNC_METHOD, SYNC_URL)
     state = None
-    while True:
+    async def listen():
       # listen for endpoint changes
       try:
         response = urequests.request(SYNC_METHOD, SYNC_URL)
@@ -94,7 +94,7 @@ def configure(app: App):
                 log.exception(e)
             log.info('waiting for endpoint change')
             break
-          time.sleep(.1)
+          await uasyncio.sleep(.1)
       
       """
       Uncomment to use BOOTSEL as ON switch too
@@ -119,4 +119,5 @@ def configure(app: App):
       #       break
       #     time.sleep(.1)
     
-      time.sleep(1)
+      await uasyncio.sleep(1)
+      uasyncio.create_task(listen())

@@ -7,14 +7,13 @@
   <meta charset="utf-8">
   <style>
     html, body {
-      height: -webkit-fill-available; width: -webkit-fill-available;
-      margin: 0;
+      height: 100%; width: 100%; margin: 0;
       display: flex; flex-direction: column;
-      align-items: center; justify-content: center; text-align: center;
       font-family: system-ui;
     }
-    html {
-      padding: 1em;
+    body {
+      width: calc(100% - 1em);
+      margin: .5em;
     }
     textarea {
       width: 100%;
@@ -40,6 +39,11 @@
   </script>
 </head>
 <body>
+
+  <div>
+    <b>pico-data-view</b>&nbsp;&nbsp;<i>persisted JSON data</i>
+    <span style="float:right;font-size:.85em">[ <a style="color:#ff8686" href="/portal">back to network selection</a> ]</span>
+  </div>
 
   <script>
     const editorKeyDown = event => {
@@ -166,10 +170,6 @@
       setData(data)
     }
   </script>
-  
-  <div style="padding-top: 1em">
-    [ <a style="color:#ff8686" href="/portal">back to network selection</a> ]
-  </div>
 
 </body>
 </html>
