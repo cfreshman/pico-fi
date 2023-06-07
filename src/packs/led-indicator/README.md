@@ -1,11 +1,8 @@
 ## pico-led-indicator
 
-Sync an LED (or other component) to an endpoint. Press BOOTSEL to turn off  
+Sync an LED (or other component) to an endpoint. Press BOOTSEL to turn off
 
-For example, use as a physical notification system or daily reminder 
-
-https://user-images.githubusercontent.com/19336643/222288358-0db43417-c58f-401e-b42d-7beaf3b18e99.mov
-
+For example, as a physical notification system or daily reminder
 
 
 ### Setup
