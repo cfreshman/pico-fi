@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset=utf-8>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>pico-snake</title>
+    <style>body{display:flex;flex-direction:column;margin:.5em}</style>
+    <style>
+      #game-canvas {
+        width: min(30rem, calc(100vh - 1em));
+        height: min(30rem, calc(100vh - 1em));
+        image-rendering: pixelated;
+      }
+      @media (hover: hover) and (pointer: fine) { .mobile { display: none } }
+    </style>
+  </head>
+  <body>
+
+    <canvas id="game-canvas"></canvas>
+    <div class="mobile">Not intended for mobile devices</div>
+
+    <script>
+      // set board size to 20x20
+      const SIZE = 20
+
+      // set the canvas to SIZE width and height
+      const canvas = document.querySelector('#game-canvas')
+      canvas.width = SIZE
+      canvas.height = SIZE
+      const ctx = canvas.getContext('2d')
+
+      // an x,y Vector
+      // can add to another Vector
+      // can check if this Vector equals another Vector
+      // can draw a colored square at this Vector
+      // can generate a new random vector within nxm
+      class Vector {
+        constructor(x, y) {
+          this.x = x
+          this.y = y
+        }
+        add(other) {
+          return new Vector(this.x + other.x, this.y + other.y)
+        }
+        eq(other) {
+          return this.x === other.x && this.y === other.y
+        }
+        draw(ctx, color) {
+          ctx.fillStyle = color
+          ctx.fillRect(this.x, this.y, 1, 1)
+        }
+        static random(n=SIZE, m=n) {
+          return new Vector(
+            Math.floor(Math.random() * n),
+            Math.floor(Math.random() * m))
+        }
+      }
+      // cardinal directions the snake can move in
+      const DIRS = {
+        right: new Vector(1, 0),
+        up: new Vector(0, -1),
+        left: new Vector(-1, 0),
+        down: new Vector(0, 1),
+      }
+
+      // === GAME STATE ===
+      // start the snake with length 3, heading towards the right
+      // and place the apple at a random position
+      const snake = [0, 1, 2].map(i => new Vector(SIZE/2 - i, SIZE/2))
+      let direction = DIRS.right
+      let last = direction
+      let apple = Vector.random()
+      // how many new segments to grow
+      let growth = 0
+      // is the game over
+      let gameover = false
+
+      // === GAME LOOP ===
+      function loop() {
+        if (gameover) return
+
+        // calculate moved head based on direction, and check if it is out of bounds
+        const head = snake[0].add(direction)
+        last = direction
+        if (head.x < 0 || head.x > SIZE-1 || head.y < 0 || head.y > SIZE-1) {
+          gameover = true
+          return
+        }
+
+        // remove the last segment and add the head
+        // or keep the last segment if still growing (growth > 0)
+        // check if the head intersects with any body segment
+        if (growth > 0) {
+          growth--
+        } else {
+          snake.pop()
+        }
+        if (snake.some(segment => head.eq(segment))) {
+          gameover = true
+          return
+        }
+        snake.unshift(head)
+
+        // check if the head is at the same position as the apple
+        // if so, grow the body and move the apple to a new location
+        if (head.eq(apple)) {
+          growth += 1
+          do {
+            apple = Vector.random()
+          } while (snake.some(segment => segment.eq(apple)))
+        }
+
+        // draw the scene:
+        // 1) cover the entire scene with black
+        // 2) fill each snake segment with green
+        // 3) fill the apple position with red
+        ctx.fillStyle = 'black'
+        ctx.fillRect(0, 0, SIZE, SIZE)
+        snake.forEach(segment => segment.draw(ctx, '#34eb7d'))
+        apple.draw(ctx, 'red')
+      }
+
+      // === GAME INPUT ===
+      // listen for pressed keys to re-direct the snake
+      window.addEventListener('keydown', evt => {
+        switch (evt.key) {
+          case 'd':
+          case 'ArrowRight':
+            if (last !== DIRS.left) direction = DIRS.right
+            break
+          case 'w':
+          case 'ArrowUp':
+            if (last !== DIRS.down) direction = DIRS.up
+            break
+          case 'a':
+          case 'ArrowLeft':
+            if (last !== DIRS.right) direction = DIRS.left
+            break
+          case 's':
+          case 'ArrowDown':
+            if (last !== DIRS.up) direction = DIRS.down
+            break
+          case ' ':
+            if (gameover) location.reload()
+            break
+        }
+      })
+
+      // run loop() 10 times per second (every 100ms)
+      setInterval(loop, 100)
+
+    </script>
+  </body>
+</html>

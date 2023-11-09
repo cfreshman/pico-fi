@@ -479,7 +479,7 @@
         .map((x,i) => x.replace(/^([$|] )+/, ''))
         .join('\n')
       
-      console.debug('ACTION', { name, detail, expanded, waiting })
+      console.debug('ACTION', { name, detail, expanded, waiting, command })
       if (name === 'run') {
         if (history && command !== run_history.slice(-1)[0]) {
           run_history.push(command)
