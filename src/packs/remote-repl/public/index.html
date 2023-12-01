@@ -113,7 +113,7 @@
       if (event.shiftKey) {
         event.preventDefault()
         localStorage.setItem(VALUE_KEY, input.value)
-        command(input.value)
+        command(input.value, false)
         return
       }
   
@@ -201,7 +201,7 @@
   </div>
   <div style="position:relative">
     <div id="commands" style="margin-right:.33em">
-      <button onclick="command(input.value)">run</button>
+      <button onclick="command(input.value, false)">run</button>
       <select id="select-run-option" style="width:6.5em"
       onchange="
       setRunOption(event.target.value)
@@ -247,7 +247,7 @@
       download.click()
       document.body.removeChild(download)
       ">export</button>
-      &nbsp;<a href="https://freshman.dev/git:pico-fi-remote-repl" id="readme" style="font-size:.7em" target="_blank" rel="noreferrer">README</a>
+      &nbsp;<a href="https://github.com/cfreshman/pico-fi/tree/master/src/packs/remote-repl#examples" id="readme" style="font-size:.7em" target="_blank" rel="noreferrer">README</a>
     </div>
     <!-- <button onclick="
     fetch('/repl/?token=')
@@ -329,10 +329,11 @@
           }
         }
 
-        const value = history[history_index] = event.target.value
+        const value = event.target.value
           .split('\n')
           .map(x => x.replace(/^([$|] )+/, ''))
           .join('\n')
+        if (run_history_index === run_history.length - 1) run_history[run_history_index] = value
         if (event.key === 'Enter') {
           if (event.shiftKey) {
             const cursor = event.target.selectionStart
@@ -352,18 +353,18 @@
             }
           } else {
             event.preventDefault()
-            command(value)
+            command(value, true)
           }
         } else if (event.key === 'ArrowUp') {
-          if (history_index > 0) {
-            history_index -= 1
-            event.target.value = event.target.value.slice(0, 2) + history[history_index]
+          if (run_history_index > 0) {
+            run_history_index -= 1
+            event.target.value = event.target.value.slice(0, 2) + run_history[run_history_index]
             setTimeout(() => event.target.selectionStart = event.target.value.length)
           }
         } else if (event.key === 'ArrowDown') {
-          if (history_index < history.length - 1) {
-            history_index += 1
-            event.target.value = event.target.value.slice(0, 2) + history[history_index]
+          if (run_history_index < run_history.length - 1) {
+            run_history_index += 1
+            event.target.value = event.target.value.slice(0, 2) + run_history[run_history_index]
             setTimeout(() => event.target.selectionStart = event.target.value.length)
           }
         }
@@ -428,7 +429,7 @@
       _highlight()
     }
     const logs = [{
-      text: 'pico-fi-repl 1.0.3',
+      text: 'pico-remote-repl 1.0.3',
     }]
     const output = document.querySelector('#output')
     const output_text = output.querySelector('p')
@@ -437,12 +438,20 @@
       return text?.replace(/^((\$ )? *\n)+/, '').replace(/((\| )? *\n?)+$/, '')
     }
     const log = (item, waiting=false) => {
-      console.debug('LOG', item)
+      console.debug('LOG', item, logs)
       const scrolled = Math.abs((output.scrollTop + output.clientHeight) - output.scrollHeight) < 16
-      item && logs.push(item)
       if (logs.find(x => x.waiting)) logs.splice(logs.findIndex(x => x.waiting), 1)
-      const lastLog = logs.slice(-1)[0]
-      if (lastLog?.action === 'run' && item?.action === 'run') logs.splice(-1, 1)
+      item && logs.push(item)
+      for (let i = 1; i < logs.length; i++) {
+        // remove duplicated run logs
+        if (
+          (logs[i - 1] === logs[i] && logs[i].startsWith('<span style="color:#8df">'))
+          || 
+          (logs[i - 1]?.action === 'run' && logs[i]?.action === 'run' && prev_log.text === item.text)) {
+          logs.splice(i, 1)
+          break
+        }
+      }
       if (waiting) logs.push({ html: `<span style="
       color: #0f8;
       "><div class="loader"></div> ${_repl_incremental ? `listening for output from ${board_name || 'Pico W'}, ^C to <a onclick="ws.send('interrupt')">interrupt</a>` : `waiting for result from ${board_name || 'Pico W'}`}</span>`, waiting })
@@ -481,10 +490,12 @@
       
       console.debug('ACTION', { name, detail, expanded, waiting, command })
       if (name === 'run') {
-        if (history && command !== run_history.slice(-1)[0]) {
+        if (history && command.trim() && command !== run_history.slice(-1)[0]) {
+          run_history.pop()
           run_history.push(command)
+          run_history.push('')
+          run_history_index = run_history.length
         }
-        run_history_index = run_history.length - 1
         localStorage.setItem('run-history', JSON.stringify(run_history))
         localStorage.setItem('run-history-index', JSON.stringify(run_history_index))
       }
@@ -525,16 +536,12 @@
         "
         >copy</a>/<a
         onclick="
-        command(run_history[${run_history_index - 1}])
+        command(run_history[${run_history_index - 1}], false)
         ">rerun</a></span>]<span class="show" style="cursor:default;color:#8df;display:none">\n${detail}</span>` : ''}`
       }))
 
       if (waiting) log(false, waiting)
     }
-
-
-    const history = []
-    let history_index = 0
 
     let board_name = undefined
     const _parseBoard = output => {
@@ -625,7 +632,7 @@
         _completeRun()
       })
     }
-    const command = (text, expanded=false, history=true) => {
+    const command = (text, expanded=true, history=true) => {
       if (commands['run'].disabled) return
 
       action('run', text, expanded, true, history)

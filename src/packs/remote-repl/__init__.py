@@ -89,7 +89,7 @@ def configure(app: App):
         else: os.remove('user.py')
 
       command = unquote_to_bytes(req.query.get('command', '')).decode()
-      app.websocket.emit('command', command)
+      # app.websocket.emit('command', command)
 
       run_option = unquote_to_bytes(req.query.get('run_option', '')).decode()
       log.info(
