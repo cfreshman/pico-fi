@@ -10,7 +10,7 @@ pico_fi.run(id='w-pico', password='pico1234', indicator='LED')
 
 
 """
-Example with randomized network name (w-#######) and custom routes
+Example with randomized network name (w-pico-#######) and custom routes
 """
 # from machine import Pin
 # import pico_fi

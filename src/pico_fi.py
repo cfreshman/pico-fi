@@ -30,6 +30,7 @@ class App:
     """
 
     IP = '192.168.4.1'
+    NETWORK_JSON = 'network.json'
 
     def __init__(self, id=None, password='', indicator=None):
         self.running = False
@@ -67,6 +68,15 @@ class App:
             WS.Opcode.TEXT: None,
             WS.Opcode.BINARY: None,
         }
+
+        try:
+            with open(App.NETWORK_JSON) as f:
+                self.networks = json.loads(f.read())
+            log.info('stored network logins:', self.networks)
+        except:
+            self.networks = { 'list': [], 'logins': {} }
+            log.info('no stored network login')
+        self.preferred_networks = []
 
         if indicator and not isinstance(indicator, LED): indicator = LED(indicator, .05)
         self.indicator = indicator or LED.Mock()
@@ -171,7 +181,10 @@ class App:
         if networks:
             id_len = max(len(x[0]) for x in networks)
             for x in networks:
-                ssid_padded = x[0].decode() + ' '*(id_len - len(x[0]))
+                ssid = x[0].decode()
+                if ssid:
+                    self.preferred_networks.append(ssid)
+                ssid_padded = ssid + ' '*(id_len - len(x[0]))
                 bssid = delimit(binascii.hexlify(x[1]).decode(), 2, ':')
                 log.info(
                 f'{-x[3]} {ssid_padded} ({bssid}) chnl={x[2]} sec={x[4]} hid={x[5]}')
@@ -180,7 +193,7 @@ class App:
         STORE_ID_KEY = 'id'
         # if ID undefined, read previous or generate new
         if not self.id or isinstance(self.id, int):
-            self.id = Store.get(STORE_ID_KEY, 'w-'+randlower(self.id or 7))
+            self.id = Store.get(STORE_ID_KEY, 'w-pico-'+randlower(self.id or 7))
         # increment ID while already in use
         network_ids = [x[0].decode() for x in networks]
         original_id = self.id
@@ -206,20 +219,28 @@ class App:
         Attempt network connection.
         If using stored credentials and connection fails, retry once per minute
         """
-        NETWORK_JSON = 'network.json'
-        if not ssid:
+        if ssid and key:
+            self.networks['logins'][ssid] = key
             try:
-                with open(NETWORK_JSON) as f: network = json.loads(f.read())
-                log.info('stored network login:', network)
-                ssid = network['ssid']
-                key = network['key']
+                self.networks['list'].remove(ssid)
             except:
-                log.info('no stored network login')
-                return
-        else:
-            network = { 'ssid': ssid, 'key': key }
-            log.info('store network login:', network)
-            with open(NETWORK_JSON, 'w') as f: f.write(json.dumps(network))
+                pass
+            self.networks['list'].insert(0, ssid)
+            log.info('store network login:', self.networks)
+            with open(App.NETWORK_JSON, 'w') as f: f.write(json.dumps(self.networks))
+
+        if len(self.networks['list']):
+            network_list = self.networks['list'][:]
+            n_i = 0
+            while n_i < len(network_list) and network_list[n_i] not in self.preferred_networks: n_i += 1
+            if n_i < len(network_list):
+                ssid = self.networks['list'][n_i]
+                key = self.networks['logins'][ssid]
+
+        if not ssid:
+            log.info('no matching stored network login')
+            return
+        log.info(f'attempting to connect to {ssid}')
 
         self.sta.active(True)
         self.sta.connect(ssid, key)

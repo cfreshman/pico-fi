@@ -308,10 +308,15 @@ try:
           wait()
 
           if args.network:
-            ssid, key = args.network.split(':', maxsplit=1)
-            print('Writing network credentials:', ssid, key)
+            net_list = []
+            net_logins = {}
+            for ssid_key in args.network.split(','):
+              ssid, key = ssid_key.split(':', maxsplit=1)
+              net_list.append(ssid)
+              net_logins[ssid] = key
+            print('Writing network credentials:', net_logins)
             with open(f'{sync_dir}/network.json', 'w') as f:
-              f.write(json.dumps({ 'ssid': ssid, 'key': key }))
+              f.write(json.dumps({ 'list': net_list, 'logins': net_logins }))
 
           # Only sync changed files
           os.system(f'mkdir -p build/sync')

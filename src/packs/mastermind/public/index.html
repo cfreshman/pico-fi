@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset=utf-8>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>pico-mastermind</title>
+    <style>
+      :root {
+        --hole-background: #555;
+        --hole-border: #aaa;
+      }
+      body {
+        background: #cbbeb5;
+        font-family: monospace;
+        display: flex;
+        flex-direction: column;
+        margin: .5em;
+      }
+      .container {
+        width: fit-content;
+        background: #222;
+        padding: .5em;
+        border-radius: .5em;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: .75em;
+      }
+      .container button:not(:disabled) {
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+
+    <div>
+      <b>mastermind</b>
+      <i>guess the hidden code</i>
+    </div>
+    <br />
+    <div id=inputs></div>
+    <br />
+    <div id=board></div>
+    <br />
+    <div id=message></div>
+
+    <script>
+      const CODE_LENGTH = 4
+      const MAX_GUESSES = 10
+      const Color = {
+        RED: 'red',
+        GREEN: 'green',
+        YELLOW: 'yellow',
+        BLUE: 'blue',
+        WHITE: 'white',
+        BLACK: 'black',
+      }
+      const State = {
+        INIT: 'init',
+        PLAY: 'play',
+        WIN: 'win',
+        LOSE: 'lose',
+      }
+      let player = -1, guess = [], guesses = [], feedbacks = [], code = [], waiting = false, state = State.INIT
+      const html = {
+        inputs: () => {
+          const can_input = !waiting && (
+            (player === 0 && state === State.INIT)
+            ||
+            (player === 1 && state === State.PLAY)
+          )
+          const row = player === 0 ? code : guess
+          return `
+          <div class="container">
+            <div style="display: flex; gap: .25em">${
+              Object.values(Color).map((color) => 
+              `<div onclick="
+              handle.input('${color}')
+              " style="
+              background: ${color};
+              border-radius: 50%;
+              height: 1.5em;
+              width: 1.5em;
+              border: .5px solid var(--hole-border);
+              cursor: pointer;
+              "></div>`).join('')
+            }</div>
+            <div style="display: flex; gap: .167em">
+              <button ${can_input && row.length > 0 ? '' : 'disabled'} onclick="handle.undo()">undo</button>
+              <button ${can_input && row.length === CODE_LENGTH ? '' : 'disabled'} onclick="handle.submit()">submit</button>
+            </div>
+          </div>
+          `
+        },
+        row: (code, [correct, common]=[0, 0]) => {
+          const feedback = [].concat(
+            Array.from({ length: correct }).map(() => 'red'),
+            Array.from({ length: common }).map(() => 'white'))
+          const render_feedback = (i) => `<div style="
+          background: ${feedback[i] || 'var(--hole-background)'};
+          border-radius: 50%;
+          height: .5em;
+          width: .5em;
+          "></div>`
+          return `<div style="display: flex; gap: .25em; align-items: center;">
+            ${Array.from({length:4}).map((_,i) => 
+            `<div style="
+            background: ${code[i] || 'var(--hole-background)'};
+            border-radius: 50%;
+            height: 1.5em;
+            width: 1.5em;
+            border: .5px solid var(--hole-border);
+            "></div>`).join('')}
+            <table>
+              <tbody>
+                <tr>
+                  <td>${render_feedback(0)}</td>
+                  <td>${render_feedback(1)}</td>
+                </tr>
+                <tr>
+                  <td>${render_feedback(2)}</td>
+                  <td>${render_feedback(3)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>`
+        },
+        board: () => {
+          const guess_list = guesses.length < MAX_GUESSES && guess.length > 0 ? [...guesses, guess] : guesses
+          return `<div class="container">
+            ${Array.from({ length:MAX_GUESSES }).map((_,i) => html.row(guess_list[i] ?? [], feedbacks[i])).join('\n')}
+            <br />
+            ${html.row(player === 0 || ['win', 'lose'].includes(state) ? code : [])}
+          </div>`
+        },
+        message: () => {
+          const message = `
+          <div>
+            ${player < 0
+            ? 'Waiting to join'
+            : player > 1
+            ? 'Game is full'
+            : state === State.INIT
+            ? `${player === 0 ? 'You (player 1) are' : 'Player 1 is'} entering the code`
+            : state === State.PLAY
+            ? 
+              waiting
+              ? `Waiting for response to guess #${guesses.length + 1}`
+              : guesses.length === 0
+              ? `${player === 1 ? 'You (player 2) are' : 'Player 2 is'} guessing the code`
+              : `${player === 1 ? 'You (player 2) are' : 'Player 2 is'} on guess #${guesses.length + 1}`
+            : state === State.LOSE
+            ? 'Player 2 lost'
+            : state === State.WIN
+            ? 'Player 2 won!'
+            : ''}
+          </div>`
+          return `${message}
+          ${['lose', 'win'].includes(state) && player === 0 ? `<div>
+            <button onclick="handle.new()">new game</button>
+          </div>` : ''}
+          `
+        },
+      }
+      const handle = {
+        render: () => {
+          inputs.innerHTML = html.inputs()
+          board.innerHTML = html.board()
+          message.innerHTML = html.message()
+        },
+        input: (color) => {
+          if (player === 0 && state === State.INIT) {
+            if (code.length < CODE_LENGTH) {
+              code.push(color)
+              handle.render()
+            }
+          } else if (player === 1 && state === State.PLAY) {
+            if (guesses.length < MAX_GUESSES && guess.length < CODE_LENGTH) {
+              guess.push(color)
+              handle.render()
+            }
+          }
+        },
+        undo: () => {
+          if (player === 0 && state === State.INIT) {
+            if (code.length > 0) {
+              code.pop()
+              handle.render();
+            }
+          } else if (player === 1 && state === State.PLAY) {
+            if (guess.length > 0) {
+              guess.pop()
+              handle.render();
+            }
+          }
+        },
+        submit: () => {
+          if (player === 0 && state === State.INIT) {
+            if (code.length === CODE_LENGTH) {
+              waiting = true
+              ws.send(`mastermind-play ${player} ${code.join(' ')}`)
+              handle.render()
+            }
+          } else if (player === 1 && state === State.PLAY) {
+            if (guess.length === CODE_LENGTH) {
+              waiting = true
+              ws.send(`mastermind-play ${player} ${guess.join(' ')}`)
+              guess = []
+              handle.render()
+            }
+          }
+        },
+        new: () => {
+          ws.send(`mastermind-new ${player}`)
+        },
+      }
+      guesses.push(guess)
+      handle.render()
+
+      let ws = new WebSocket('ws://' + location.host)
+      ws.onmessage = e => {
+        console.log(e.data)
+        const [event, ...contents] = e.data.split(' ')
+        switch (event) {
+          case 'mastermind-full':
+            player = 2
+            handle.render()
+            break
+          case 'mastermind-played':
+            player = Number(contents[0])
+            fetch('/mastermind-state').then(r=>r.json()).then(data => {
+              let new_code
+              const ignore_new_code = player === 0 && state === State.INIT
+              ;({state, mode, code:new_code, guesses, feedbacks} = data)
+              if (!ignore_new_code) code = new_code
+              waiting = false
+              handle.render()
+            })
+        }
+      }
+      ws.onopen = () => {
+        ws.send('mastermind-join')
+      }
+      window.addEventListener('beforeunload', e => {
+        ws.send(`mastermind-leave ${player}`)
+      })
+
+    </script>
+  </body>
+</html>
