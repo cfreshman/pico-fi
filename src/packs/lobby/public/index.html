@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>pico-lobby</title><meta name=description content="join a room" />
+    <meta charset=utf-8><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://freshman.dev/copyright.js"></script>
+    <style>
+      body {
+        background: #d2e7dc;
+        font-family: monospace;
+        display: flex;
+        flex-direction: column;
+        margin: .5em;
+      }
+      .container {
+        width: fit-content;
+        background: #222;
+        color: #fff;
+        padding: .5em;
+        border-radius: .5em;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: .75em;
+      }
+      button {
+        font-family: inherit;
+      }
+      .container button:not(:disabled) {
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+
+    <div data-hydrate data-title></div>
+    <br />
+    <div id=gallery></div>
+
+    <script>
+      let player, code = undefined, rooms = {}, waiting = true
+      const html = {
+        lobby: (state) => {
+          return `
+          <div class="container">
+            ${state.code.toUpperCase()} ${state.players.length}/${state.capacity}
+            ${state.new
+              ? `<button ${waiting ? 'disabled' : ''} onclick="handle.create()">create</button>` 
+              : code === state.code
+              ? `<button ${waiting ? 'disabled' : ''} onclick="handle.leave('${state.code}')">leave</button>` 
+              : `<button ${waiting ? 'disabled' : ''} onclick="handle.join('${state.code}')">join</button>`
+            }
+          </div>
+          `
+        },
+        gallery: (states) => {
+          return `<div style="
+          display: flex;
+          flex-wrap: wrap;
+          gap: .25em;
+          align-items: start;
+          ">
+            ${states.map((state, i) => html.lobby(state)).join('\n')}
+            ${html.lobby({
+              new: true,
+              code: 'new room',
+              players: [],
+              capacity: 4,
+            })}
+          </div>`
+        },
+      }
+      const handle = {
+        render: () => {
+          gallery.innerHTML = html.gallery(Object.values(rooms))
+        },
+        create: () => {
+          ws.send(`lobby-room-create ${player}`)
+          waiting = true
+          handle.render()
+        },
+        leave: (code) => {
+          ws.send(`lobby-room-leave ${player} ${code}`)
+          store.set('lobby-code', undefined)
+          waiting = true
+          handle.render()
+        },
+        join: (code) => {
+          ws.send(`lobby-room-join ${player} ${code}`)
+          waiting = true
+          handle.render()
+        },
+      }
+      handle.render()
+
+      let ws = new WebSocket('ws://' + location.host)
+      ws.onmessage = e => {
+        console.log(e.data)
+        const [event, ...contents] = e.data.split(' ')
+        switch (event) {
+          case 'lobby-joined':
+            player = contents[0]
+            waiting = false
+            handle.render()
+            break
+          case 'lobby-state':
+            data = JSON.parse(contents.slice(1).join(' '))
+            ;({room} = data)
+            if (room) {
+              rooms[room.code] = room
+              if (room.players.includes(player)) {
+                code = room.code
+              } else if (code === room.code) {
+                code = undefined
+              }
+            }
+            store.set('lobby-code', code)
+            waiting = false
+            handle.render()
+            break
+        }
+      }
+      ws.onopen = () => {
+        ws.send('lobby-join')
+      }
+      window.addEventListener('beforeunload', e => {
+        handle.leave(code)
+        ws.send(`lobby-leave ${player}`)
+      })
+      fetch('lobby-state').then(x=>x.json()).then(data => {
+        ;({ rooms } = data)
+      })
+
+    </script>
+  </body>
+</html>

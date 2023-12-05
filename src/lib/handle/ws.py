@@ -88,11 +88,11 @@ class WebSocket(ProtocolHandler):
         for sock in [x.sock for x in self.conns]:
             if socket_id and id(sock) != socket_id: continue
             try:
-                log.info('WebSocket send', id(sock), WS.Opcode.name(opcode))
+                log.debug('WebSocket send', id(sock), WS.Opcode.name(opcode))
                 self.io.send(sock, opcode, message)
                 sent = True
                 # write & read immediately
-                log.info('WebSocket flush and read')
+                log.debug('WebSocket flush and read')
                 while not self.io.write(sock): pass
                 self.read(sock)
             except Exception as e:
@@ -102,18 +102,20 @@ class WebSocket(ProtocolHandler):
 
     def read(self, sock: socket.socket):
         """read WebSocket frame from client and pass to handler"""
-        [opcode, data] = self.io.read(sock)
-        if opcode == WS.Opcode.CLOSE: self.conns.remove(connection.of(sock))
-        if opcode == WS.Opcode.PING: self.io.send(sock, WS.Opcode.PONG)
-        if data:
-            msg = WebSocket.Message(self, sock, opcode, data)
-            handler = self.events.get(msg.type, None)
-            log.info('WebSocket read', msg, handler)
-            if not handler:
-                if msg.type == b'connect':
-                    self.emit('connected', msg.s_id, socket_id=msg.s_id)
-                elif opcode in self.events: handler = self.events[opcode]
-            handler and handler(msg)
+        result = self.io.read(sock)
+        if result:
+            [opcode, data] = result
+            if opcode == WS.Opcode.CLOSE: self.conns.remove(connection.of(sock))
+            if opcode == WS.Opcode.PING: self.io.send(sock, WS.Opcode.PONG)
+            if data:
+                msg = WebSocket.Message(self, sock, opcode, data)
+                handler = self.events.get(msg.type, None)
+                log.debug('WebSocket read', msg, handler)
+                if not handler:
+                    if msg.type == b'connect':
+                        self.emit('connected', msg.s_id, socket_id=msg.s_id)
+                    elif opcode in self.events: handler = self.events[opcode]
+                handler and handler(msg)
 
     def write(self, sock):
         # if write complete, switch back to read
