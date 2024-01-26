@@ -184,10 +184,10 @@ class App:
                 ssid = x[0].decode()
                 if ssid:
                     self.preferred_networks.append(ssid)
-                ssid_padded = ssid + ' '*(id_len - len(x[0]))
-                bssid = delimit(binascii.hexlify(x[1]).decode(), 2, ':')
-                log.info(
-                f'{-x[3]} {ssid_padded} ({bssid}) chnl={x[2]} sec={x[4]} hid={x[5]}')
+                    ssid_padded = ssid + ' '*(id_len - len(x[0]))
+                    bssid = delimit(binascii.hexlify(x[1]).decode(), 2, ':')
+                    log.info(
+                    f'{-x[3]} {ssid_padded} ({bssid}) chnl={x[2]} sec={x[4]} hid={x[5]}')
 
         # start access point
         STORE_ID_KEY = 'id'
@@ -229,6 +229,14 @@ class App:
             log.info('store network login:', self.networks)
             with open(App.NETWORK_JSON, 'w') as f: f.write(json.dumps(self.networks))
 
+        self.preferred_networks = []
+        networks = sorted(self.sta.scan(), key=lambda x: -x[3])
+        if networks:
+            for x in networks:
+                ssid_item = x[0].decode()
+                if ssid_item:
+                    self.preferred_networks.append(ssid_item)
+
         if len(self.networks['list']):
             network_list = self.networks['list'][:]
             n_i = 0
@@ -237,26 +245,26 @@ class App:
                 ssid = self.networks['list'][n_i]
                 key = self.networks['logins'][ssid]
 
+        status = None
         if not ssid:
             log.info('no matching stored network login')
-            return
-        log.info(f'attempting to connect to {ssid}')
+        else:
+            log.info(f'attempting to connect to {ssid}')
 
-        self.sta.active(True)
-        self.sta.connect(ssid, key)
-        if not wait: return
+            self.sta.active(True)
+            self.sta.connect(ssid, key)
+            if not wait: return
 
-        # wait up to 10s for connection to succeed (or 30s for retry)
-        wait = 30 if is_retry else 10
-        status = None
-        while wait > 0:
-            wait -= 1
-            newStatus = self.sta.status()
-            if status != newStatus:
-                status = newStatus
-                log.info(f'network connect attempt status {status}...')
-            if 0 <= status < 3: time.sleep(1)
-            else: break
+            # wait up to 10s for connection to succeed (or 30s for retry)
+            wait = 30 if is_retry else 10
+            while wait > 0:
+                wait -= 1
+                new_status = self.sta.status()
+                if status != new_status:
+                    status = new_status
+                    log.info(f'network connect attempt status {status}...')
+                if 0 <= status < 3: time.sleep(1)
+                else: break
 
         if status == 3:
             self.sta_ip = self.sta.ifconfig()[0]
@@ -271,10 +279,18 @@ class App:
             log.info('network connect failed')
             self.sta.active(False)
             if not is_retry:
-                log.info(f'will retry connection to {ssid} once per minute')
-                while self.sta.status() != 3:
-                    self.connect(ssid, key, True, True)
-                    time.sleep(60)
+                if key:
+                    log.info(f'will retry connection to {ssid} every 5s')
+                    while self.sta.status() != 3:
+                        self.connect(ssid, key, True, True)
+                        time.sleep(5)
+                else:
+                    log.info(f'will retry connection to wifi every 5s')
+                    while self.sta.status() != 3:
+                        self.connect(None, None, True, True)
+                        time.sleep(5)
+            else:
+                log.info(f'retrying in 5s')
 
     def stop(self):
         comment('stop pico-fi')

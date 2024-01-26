@@ -1,0 +1,118 @@
+<!-- cyrusfreshman 2023 -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset=utf-8><meta name="viewport" content="width=device-width, initial-scale=1" />
+<script src="https://freshman.dev/copyright.js"></script><meta data-hydrate data-style />
+
+<title>echo</title>
+<style>
+  #root {
+    width: 100%;
+  }
+  input {
+    background: #000 !important;
+    color: #fff !important;
+    border-color: #000 !important;
+  }
+  input, .messages {
+    width: min(30em, 100%);
+  }
+  input, .message {
+    margin-bottom: .25em !important;
+  }
+  .message {
+    border: 1px solid #000;
+    border-radius: .67em;
+    padding: .1667em .67em;
+    max-width: min(30em, 100vw);
+  }
+  .info {
+    font-size: .67em;
+  }
+  .self {
+    align-self: flex-end;
+    &.message {
+      background: #000;
+      color: #fff;
+    }
+  }
+</style>
+</head>
+<body>
+  
+  <div id=root></div>
+  <script>
+    const log = named_log('echo')
+    const id = store.get('pico-fi_echo_id') || rand.alphanum(16)
+
+    root.innerHTML = 'waiting to connect...'
+    let ws = undefined
+    const connect = () => {
+      ws = new WebSocket('ws://' + location.host)
+      ws.onopen = () => {
+        root.innerHTML = ''
+        const input = node(`<input type="text" placeholder="enter message"></input>`)
+        const message_list = node(`<div class="column" style="
+        width: min(30em, 100%);
+        "></div>`)
+        root.append(input, message_list)
+
+        let last_id = undefined
+        ws.onmessage = e => {
+          const [type, ...args] = e.data.split(' ')
+          const content = args.join(' ')
+          switch (type) {
+            case 'echo-echo':{
+              const [other, ...message_parts] = args
+              const message = message_parts.join(' ')
+              if (last_id !== other) {
+                message_list.prepend(node(`<div class="info ${other === id ? 'self' : ''}">${id}</div>`))
+                last_id = other
+              }
+              message_list.prepend(node(`<div class="message ${other === id ? 'self' : ''}">${message}</div>`))
+            }break
+            case 'echo-join':{
+              const other = content
+              message_list.prepend(node(`<div class="info ${other === id ? 'self' : ''}">${content} connected</div>`))
+            }break
+            case 'echo-leave':{
+              message_list.prepend(node(`<div class="info">${content} disconnected</div>`))
+            }break
+          }
+        }
+
+        const handle = {
+          join: () => {
+            ws.send(`echo-join ${id}`)
+          },
+          leave: () => {
+            ws.send(`echo-leave ${id}`)
+          },
+          message: (message) => {
+            ws.send(`echo-echo ${id} ${message}`)
+          },
+        }
+        on(input, 'keydown', e => {
+          if (e.key === 'Enter') {
+            handle.message(input.value)
+            input.value = ''
+          }
+        })
+        handle.join()
+        on(window, 'beforeunload', () => {
+          handle.leave()
+        })
+      }
+      ws.onclose = () => {
+        ws.onmessage = undefined
+        root.innerHTML = `disconnected`
+        connect()
+      }
+    }
+    connect()
+
+  </script>
+
+</body>
+</html>

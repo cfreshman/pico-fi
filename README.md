@@ -97,6 +97,8 @@ If your [main.py](./src/main.py) grows too complex, split into separate concerns
 
 See [packs/hello-world](./src/packs/remote-repl/__init__.py) for a showcase of pico-fi features
 
+Tip: prefix non-index.html files with the pack name, like cards-icon.png, since all the files get moved into the base directory when built
+
 #### Looking for project ideas?
 * A multiplayer chess/checkers app anyone in the area can connect to
 * Publish sensor data with MQTT https://www.tomshardware.com/how-to/send-and-receive-data-raspberry-pi-pico-w-mqtt
