@@ -119,7 +119,7 @@ try:
         wait_from = time.time()
         if os.popen(f'[ -f build/micropython.uf2 ] || echo n').read().strip():
           os.system(f"""
-          curl http://micropython.org/download/rp2-pico-w/rp2-pico-w-latest.uf2 > build/micropython.uf2
+          curl -L http://micropython.org/download/rp2-pico-w/rp2-pico-w-latest.uf2 > build/micropython.uf2
           """)
         os.system(f"""
         cp build/micropython.uf2 {rpi_mount_dir}/

@@ -1,8 +1,7 @@
 """
-Play a 2-player game of mastermind
-$ python3 build -a mastermind
+pico-lobby
 
-TODO allow multiple games at once
+base for lobbied games
 """
 from lib import randloweralphanum
 from lib.logging import log

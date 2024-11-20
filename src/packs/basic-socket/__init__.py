@@ -1,6 +1,7 @@
 """
-Basic module configuration showcase
-$ python3 build -a hello-world
+pico-basic-socket
+
+simple socket showcase
 """
 from lib.logging import log
 from pico_fi import App

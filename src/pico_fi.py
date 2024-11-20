@@ -9,6 +9,8 @@ import time
 
 import network
 import uasyncio
+import machine
+import socket
 
 from lib.handle.dns import DNS
 from lib.handle.http import HTTP
@@ -150,6 +152,7 @@ class App:
             print('started')
         """
         self.effects['start'].append(func)
+        log.info('registered start func', len(self.effects['connect']))
         return func
     
     def connected(self, func):
@@ -161,6 +164,7 @@ class App:
             print('connected')
         """
         self.effects['connect'].append(func)
+        log.info('registered connect func', len(self.effects['connect']))
         return func
 
     def start(self):
@@ -271,6 +275,13 @@ class App:
             self.ip_sink.set(False)
             log.info(f'network connected with ip', self.sta_ip)
             log.info(f'OPEN http://{self.sta_ip} TO ACCESS PICO W')
+            log.info(f'OR SCAN QR: https://freshman.dev/raw/qr/display?=http://{self.sta_ip}')
+
+            # log.info('verifying connection with google hostname lookup')
+            # log.info('connected:', self.sta.isconnected())
+            # log.info('ifconfig:', self.sta.ifconfig())
+            # log.info('local adddrinfo:', self.sta_ip, '->', socket.getaddrinfo(self.sta_ip, 80))
+            # log.info('google addrinfo:', socket.getaddrinfo('google.com', 80, 0, socket.SOCK_STREAM))
 
             async def async_connect_effects():
                 while self.effects['connect']: self.effects['connect'].pop(0)()
@@ -301,6 +312,7 @@ class App:
         Store.save()
         log.flush()
         gc.collect()
+        machine.reset()
         self.running = False
 
 
@@ -392,26 +404,30 @@ class App:
         if self.running: return
         self.running = True
         self.start()
-        try:
-            start = time.time()
-            # async def async_handle(response): self.orch.handle(*response)
-            while True:
+
+        last_save = time.time() 
+        async def inner():
+            nonlocal last_save
+            try:
                 # gc between socket events or once per minute
                 gc.collect()
-                for response in self.poller.ipoll(60_000):
+                for response in self.poller.ipoll(1):
                     self.indicator and self.indicator.pulse()
                     self.orch.handle(*response)
                     # uasyncio.create_task(async_handle(response))
 
                 # write store to file at most once per minute
                 now = time.time()
-                if now - start > 60:
+                if now - last_save > 60:
                     Store.save()
-                    start = now
+                    last_save = now
 
-        except Exception as e:
-            log.exception(e)
-            self.stop()
+                uasyncio.sleep_ms(1) # yield to other tasks
+            except Exception as e:
+                log.exception(e)
+                self.stop()
+        while self.running:
+            uasyncio.run(inner())
 
 
 def run(id=None, password='', indicator=None):

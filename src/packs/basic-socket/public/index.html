@@ -1,4 +1,3 @@
-<!-- cyrusfreshman 2023 -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -7,19 +6,41 @@
 
 <title>echo</title>
 <style>
-  #root {
+  html, body, #root {
+    height: 100%;
     width: 100%;
+    overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
   }
-  input {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-size: inherit;
+    font-family: inherit;
+  }
+  #root {
+    font-size: max(16px, 1em);
+    width: min(40em, 100%);
+    padding: .5em;
+    border: 1px solid #000;
+    border-radius: .5em;
+  }
+  #input {
     background: #000 !important;
     color: #fff !important;
     border-color: #000 !important;
+    min-height: 1.5em;
+    border-radius: .75em;
+    padding: .5em;
+    resize: none;
   }
-  input, .messages {
-    width: min(30em, 100%);
+  #input, #messages {
+    width: 100%;
   }
-  input, .message {
-    margin-bottom: .25em !important;
+  #messages {
+    height: 0; flex-grow: 1;
+    flex-direction: column-reverse;
   }
   .message {
     border: 1px solid #000;
@@ -41,22 +62,28 @@
 </head>
 <body>
   
-  <div id=root></div>
+  <div id=root class="spaced" style="
+  display: flex; flex-direction: column;
+  "></div>
   <script>
-    const log = named_log('echo')
+    const log = named_log('base-socket')
     const id = store.get('pico-fi_echo_id') || rand.alphanum(16)
 
     root.innerHTML = 'waiting to connect...'
     let ws = undefined
     const connect = () => {
-      ws = new WebSocket('ws://' + location.host)
+      try {
+        ws = new WebSocket('ws://' + location.host)
+      } catch (e) {
+        ws = {
+          send: (...x) => log('send', ...x),
+        }
+      }
       ws.onopen = () => {
         root.innerHTML = ''
-        const input = node(`<input type="text" placeholder="enter message"></input>`)
-        const message_list = node(`<div class="column" style="
-        width: min(30em, 100%);
-        "></div>`)
-        root.append(input, message_list)
+        const input = node(`<textarea id="input" placeholder="enter message" rows="1"></textarea>`)
+        const message_list = node(`<div id="messages" class="column gap"></div>`)
+        root.append(message_list, input)
 
         let last_id = undefined
         ws.onmessage = e => {
@@ -94,9 +121,16 @@
           },
         }
         on(input, 'keydown', e => {
-          if (e.key === 'Enter') {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault()
             handle.message(input.value)
             input.value = ''
+          } else {
+            defer(() => {
+              // resize textarea
+              input.style.height = 0
+              input.style.height = `calc(2px + ${input.scrollHeight}px)` // scrollHeight plus border
+            })
           }
         })
         handle.join()
@@ -109,6 +143,8 @@
         root.innerHTML = `disconnected`
         connect()
       }
+
+      if (!location.host) ws.onopen()
     }
     connect()
 

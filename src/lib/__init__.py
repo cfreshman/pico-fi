@@ -165,16 +165,18 @@ class LED:
         self.brightness = brightness
 
     def on(self, brightness=None):
-        duty = int((
-            brightness
-            if type(brightness) is float
-            else self.brightness) * LED.PWM_DUTY_CYCLE_MAX)
+        duty = int((brightness if type(brightness) is float else self.brightness) * LED.PWM_DUTY_CYCLE_MAX)
         [x.duty_u16(duty) for x in self.pwms]
     def off(self): [x.duty_u16(0) for x in self.pwms]
 
     def get(self): 
         return max(x.duty_u16() / LED.PWM_DUTY_CYCLE_MAX for x in self.pwms)
-    def set(self, on): self.on(on) if on else self.off()
+    def set(self, on):
+        if type(on) is float:
+            self.brightness = on
+            self.on(on)
+        else:
+            self.on(on) if on else self.off()
     def toggle(self): self.off() if self.get() else self.on()
 
     def pulse(self, seconds=.1):

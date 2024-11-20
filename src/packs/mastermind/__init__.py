@@ -1,5 +1,5 @@
 """
-Play a 2-player game of mastermind
+play a 2-player game of mastermind
 $ python3 build -a mastermind
 
 TODO allow multiple games at once

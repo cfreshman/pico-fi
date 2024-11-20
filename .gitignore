@@ -3,6 +3,7 @@ build/min/
 build/sync/
 build/save/
 **/*.zip
+micropython.uf2
 
 .DS_STORE
 __pycache__/

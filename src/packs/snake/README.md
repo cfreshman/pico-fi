@@ -1,6 +1,6 @@
 ## pico-snake
 
-Snake!
+snake!
 
 ### Setup
 1. Install [pico-fi](/README.md#install)

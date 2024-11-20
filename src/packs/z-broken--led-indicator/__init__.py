@@ -1,10 +1,12 @@
 """
 pico-led-indicator
 
-Sync an LED (or other component) to the state of an API endpoint
-Press BOOTSEL to turn off
+BROKEN - for some reason the pico is not able to make internet requests
 
-(You can use this as a physical notification system or daily reminder)
+sync an LED (or other component) to the state of an API endpoint
+press BOOTSEL to turn off
+
+(you can use this as a physical notification system or daily reminder)
 """
 
 import time, urequests, uasyncio
@@ -25,7 +27,7 @@ GPIO = None # set to GP## of component to use instead of on-board LED
 # replace this with your endpoint after testing
 SYNC_METHOD = 'GET'
 SYNC_URL = 'https://freshman.dev/api/switch/default/default'
-def parse(response):
+def parse_switch_response(response):
   """Parse urequests response to determine LED truthiness"""
   return response.json()['item']['state']
 
@@ -44,7 +46,7 @@ END CONFIGURATION
 
 def configure(app: App):
   led = LED(pin=GPIO or ['LED', 17], brightness=.1)
-  app.indicator = LED.Mock()
+  app.indicator = None
 
   @app.connected
   def connected():
@@ -58,19 +60,21 @@ def configure(app: App):
         log.info('(ON endpoint) request failed')
         log.exception(e)
 
-    log.info('(SYNC endpoint) attempting to', SYNC_METHOD, SYNC_URL)
     state = None
     async def listen():
+      nonlocal state
+      log.info('inside led-indicator listen')
       # listen for endpoint changes
       try:
+        if state is None: log.info('(SYNC endpoint) attempting to', SYNC_METHOD, SYNC_URL)
         response = urequests.request(SYNC_METHOD, SYNC_URL)
-        newState = parse(response)
-        if state is None: log.info('(SYNC endpoint) request succeeded, value:', newState)
-        if state != newState:
-          led.set(newState)
+        new_state = parse_switch_response(response)
+        if state is None: log.info('(SYNC endpoint) request succeeded, value:', new_state)
+        if state != new_state:
+          led.set(new_state)
           log.info('new LED state:', led.get())
           if led.get(): log.info('press BOOTSEL to turn off')
-          state = newState
+          state = new_state
         response.close()
       except Exception as e:
         log.info('(SYNC endpoint) request failed')
@@ -95,7 +99,8 @@ def configure(app: App):
             log.info('waiting for endpoint change')
             break
           await uasyncio.sleep(.1)
-      
+        
+        
       """
       Uncomment to use BOOTSEL as ON switch too
       This will add up to 60s of delay to changes from the API endpoint
@@ -118,6 +123,10 @@ def configure(app: App):
       #       log.info('waiting for endpoint change')
       #       break
       #     time.sleep(.1)
-    
+      
       await uasyncio.sleep(1)
-      uasyncio.create_task(listen())
+    async def inner():
+      await uasyncio.sleep(10)
+      while 1:
+        uasyncio.run(listen())
+    uasyncio.create_task(inner())

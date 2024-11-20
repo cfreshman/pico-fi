@@ -23,26 +23,16 @@
       margin-bottom: .25em;
     }
   </style>
-  <script>
-    const _persist = (method, data={}) =>
-      fetch(`/${method}?data=${encodeURIComponent(JSON.stringify(data))}`)
-      .then(res => res.json())
-      .then(({ data }) => {
-        console.debug(method, 'result:', data)
-        return data
-      })
-    const get = data => _persist('get', data)
-    const set = data => _persist('set', data)
-
-    const Q = (L, q=undefined) => (q ? L : document.body).querySelector(q || L)
-    const QQ = (L, q=undefined) => Array.from((q ? L : document.body).querySelectorAll(q || L))
-  </script>
+  <script src="/lib.js"></script>
 </head>
 <body>
 
   <div>
     <b>pico-data-view</b>&nbsp;&nbsp;<i>persisted JSON data</i>
-    <span style="float:right;font-size:.85em">[ <a style="color:#ff8686" href="/">back to menu</a> ]</span>
+    <span id="back-to-menu" style="float:right;font-size:.85em">[ <a style="color:#ff8686" href="/">back to menu</a> ]</span>
+    <script>
+      if (location.pathname === '/') lib.Q('#back-to-menu').style.display = 'none'
+    </script>
   </div>
 
   <script>
@@ -127,10 +117,10 @@
     <button>cancel</button>&nbsp;<button>save</button>
   </div>
   <script>
-    const editor = Q('textarea')
-    const error = Q('#error')
+    const editor = lib.Q('textarea')
+    const error = lib.Q('#error')
     const commands = {}
-    QQ('button').map(x => commands[x.textContent] = x)
+    lib.QQ('button').map(x => commands[x.textContent] = x)
 
     let data
     const setData = x => {
@@ -146,7 +136,7 @@
       }
     }
     setData(JSON.parse(localStorage.getItem('data') || 'false'))
-    get().then(setData)
+    lib.get().then(setData)
 
     commands.save.onclick = e => {
       error.textContent = ''
@@ -160,7 +150,7 @@
         const newKeys = new Set(Object.keys(data))
         const removedKeys = Object.keys(oldData).filter(x => !newKeys.has(x))
         removedKeys.map(x => data[x] = null)
-        set(data)
+        lib.set(data)
       } catch (e) {
         error.textContent = e.toString()
       }
