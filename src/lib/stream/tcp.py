@@ -33,7 +33,7 @@ class TCP:
             request = self._reads.get(sid, b'') + sock.read()
         except:
             request = b''
-            self.tcp.end(sock)
+            self.end(sock)
         self._reads[sid] = request
         return request
 
@@ -87,6 +87,7 @@ class TCP:
     def end(self, sock: socket.socket):
         """close socket, unregister from poller, and clear data"""
 
+        while not self.write(sock): pass
         log.info('end', connection.of(sock))
         sock.close()
         self._poller.unregister(sock)

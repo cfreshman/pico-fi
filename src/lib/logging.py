@@ -34,7 +34,8 @@ def str_print(*args, **kwargs):
     output.close()
     return value
 
-
+DO_DEVICE_LOG = False
+f = DO_DEVICE_LOG and open('log.txt', 'w')
 class AtomicPrint:
     """print sequentially from multiple threads"""
     _lock = uasyncio.Lock()
@@ -42,7 +43,9 @@ class AtomicPrint:
     _tasks = []
 
     async def _atomic_print(*args, **kwargs):
-        async with AtomicPrint._lock: print(*args, **kwargs)
+        async with AtomicPrint._lock:
+            print(*args, **kwargs)
+            if DO_DEVICE_LOG: f.write(str_print(*args, **kwargs) + '\n')
 
     def print(*args, **kwargs):
         task = uasyncio.create_task(AtomicPrint._atomic_print(*args, **kwargs))

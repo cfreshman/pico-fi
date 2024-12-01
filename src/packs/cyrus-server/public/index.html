@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root, body {
+      height: 100%; width: 100%;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      font-family: monospace; font-size: 16px;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <div style="
+  width: fit-content;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  ">
+    <button onclick="fetch(`/led-toggle`)" style="font-size:3em">POWER</button>
+    <br>
+    <input type="range" min="0" max="100" value="10" onchange="fetch(`/led-brightness?x=${event.target.value/100}`)" style="width: 100%;">
+  </div>
+</body>

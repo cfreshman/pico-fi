@@ -176,7 +176,7 @@ class HTTP(Server):
             key: val
             for key, val in [line.split(b': ', 1) for line in header_lines[1:]]
         }
-        host = headers[b'Host']
+        host = headers.get(b'Host', None)
         socket_id = headers.get(b'X-Pico-Fi-Socket-Id', None)
 
         return HTTP.Request(host, req_type, path, raw_query, query, headers, body_bytes, socket_id)

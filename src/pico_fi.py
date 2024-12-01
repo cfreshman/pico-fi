@@ -31,7 +31,7 @@ class App:
     Design the site to offload processing & temporary storage to the client
     """
 
-    IP = '192.168.4.1'
+    IP = '192.168.0.1'
     NETWORK_JSON = 'network.json'
 
     def __init__(self, id=None, password='', indicator=None):
@@ -223,85 +223,117 @@ class App:
         Attempt network connection.
         If using stored credentials and connection fails, retry once per minute
         """
-        if ssid and key:
-            self.networks['logins'][ssid] = key
-            try:
-                self.networks['list'].remove(ssid)
-            except:
-                pass
-            self.networks['list'].insert(0, ssid)
-            log.info('store network login:', self.networks)
-            with open(App.NETWORK_JSON, 'w') as f: f.write(json.dumps(self.networks))
+        try:
+            if ssid and key:
+                self.networks['logins'][ssid] = key
+                try:
+                    self.networks['list'].remove(ssid)
+                except:
+                    pass
+                self.networks['list'].insert(0, ssid)
+                log.info('store network login:', self.networks)
+                with open(App.NETWORK_JSON, 'w') as f: f.write(json.dumps(self.networks))
 
-        self.preferred_networks = []
-        networks = sorted(self.sta.scan(), key=lambda x: -x[3])
-        if networks:
-            for x in networks:
-                ssid_item = x[0].decode()
-                if ssid_item:
-                    self.preferred_networks.append(ssid_item)
+            self.preferred_networks = []
+            networks = sorted(self.sta.scan(), key=lambda x: -x[3])
+            if networks:
+                for x in networks:
+                    ssid_item = x[0].decode()
+                    if ssid_item:
+                        self.preferred_networks.append(ssid_item)
 
-        if len(self.networks['list']):
-            network_list = self.networks['list'][:]
-            n_i = 0
-            while n_i < len(network_list) and network_list[n_i] not in self.preferred_networks: n_i += 1
-            if n_i < len(network_list):
-                ssid = self.networks['list'][n_i]
-                key = self.networks['logins'][ssid]
+            if len(self.networks['list']):
+                network_list = self.networks['list'][:]
+                n_i = 0
+                while n_i < len(network_list) and network_list[n_i] not in self.preferred_networks: n_i += 1
+                if n_i < len(network_list):
+                    ssid = self.networks['list'][n_i]
+                    key = self.networks['logins'][ssid]
 
-        status = None
-        if not ssid:
-            log.info('no matching stored network login')
-        else:
-            log.info(f'attempting to connect to {ssid}')
-
-            self.sta.active(True)
-            self.sta.connect(ssid, key)
-            if not wait: return
-
-            # wait up to 10s for connection to succeed (or 30s for retry)
-            wait = 30 if is_retry else 10
-            while wait > 0:
-                wait -= 1
-                new_status = self.sta.status()
-                if status != new_status:
-                    status = new_status
-                    log.info(f'network connect attempt status {status}...')
-                if 0 <= status < 3: time.sleep(1)
-                else: break
-
-        if status == 3:
-            self.sta_ip = self.sta.ifconfig()[0]
-            self.ip_sink.set(False)
-            log.info(f'network connected with ip', self.sta_ip)
-            log.info(f'OPEN http://{self.sta_ip} TO ACCESS PICO W')
-            log.info(f'OR SCAN QR: https://freshman.dev/raw/qr/display?=http://{self.sta_ip}')
-
-            # log.info('verifying connection with google hostname lookup')
-            # log.info('connected:', self.sta.isconnected())
-            # log.info('ifconfig:', self.sta.ifconfig())
-            # log.info('local adddrinfo:', self.sta_ip, '->', socket.getaddrinfo(self.sta_ip, 80))
-            # log.info('google addrinfo:', socket.getaddrinfo('google.com', 80, 0, socket.SOCK_STREAM))
-
-            async def async_connect_effects():
-                while self.effects['connect']: self.effects['connect'].pop(0)()
-            uasyncio.create_task(async_connect_effects())
-        else:
-            log.info('network connect failed')
-            self.sta.active(False)
-            if not is_retry:
-                if key:
-                    log.info(f'will retry connection to {ssid} every 5s')
-                    while self.sta.status() != 3:
-                        self.connect(ssid, key, True, True)
-                        time.sleep(5)
-                else:
-                    log.info(f'will retry connection to wifi every 5s')
-                    while self.sta.status() != 3:
-                        self.connect(None, None, True, True)
-                        time.sleep(5)
+            status = None
+            if not ssid:
+                log.info('no matching stored network login')
             else:
-                log.info(f'retrying in 5s')
+                log.info(f'attempting to connect to "{ssid}"')
+
+                self.sta.active(True)
+                
+                ifconfig = self.sta.ifconfig()
+                log.info(f'preconnect IP address {ifconfig[0]} under {ifconfig[2]}')
+                self.sta.connect(ssid, key)
+                if not wait: return
+
+                # wait up to 10s for connection to succeed (or 30s for retry)
+                wait = 30 if is_retry else 10
+                while wait > 0:
+                    wait -= 1
+                    new_status = self.sta.status()
+                    if status != new_status:
+                        status = new_status
+                        log.info(f'network connect attempt status {status}...')
+                    if 0 <= status < 3: time.sleep(1)
+                    else: break
+
+            # force x.x.0.x IP address
+            if status == 3:
+                ifconfig = self.sta.ifconfig()
+                ip = ifconfig[0]
+                gateway = ifconfig[2]
+                log.info(f'network connected with IP {ip} under {gateway}')
+                ip_parts = ip.split('.')
+                if (ip_parts[2] != '0'):
+                    ip_parts[2] = '0'
+                    ip = '.'.join(ip_parts)
+                    gateway_parts = gateway.split('.')
+                    gateway_parts[2] = '0'
+                    gateway = '.'.join(gateway_parts)
+                    log.info(f'forcing IP address {ip} under {gateway}')
+                    self.sta.disconnect()
+                    self.sta.ifconfig((ip, ifconfig[1], gateway, ifconfig[3]))
+                    self.sta.connect(ssid, key)
+                    wait = 30 if is_retry else 10
+                    while wait > 0:
+                        wait -= 1
+                        new_status = self.sta.status()
+                        if status != new_status:
+                            status = new_status
+                            log.info(f'network connect attempt status {status}...')
+                        if 0 <= status < 3: time.sleep(1)
+                        else: break
+
+            if status == 3:
+                self.sta_ip = self.sta.ifconfig()[0]
+                self.ip_sink.set(False)
+                log.info(f'OPEN http://{self.sta_ip} TO ACCESS PICO W')
+                log.info(f'OR SCAN QR: https://freshman.dev/raw/qr/display?=http://{self.sta_ip}')
+
+                # log.info('verifying connection with google hostname lookup')
+                # log.info('connected:', self.sta.isconnected())
+                # log.info('ifconfig:', self.sta.ifconfig())
+                # log.info('local adddrinfo:', self.sta_ip, '->', socket.getaddrinfo(self.sta_ip, 80))
+                # log.info('google addrinfo:', socket.getaddrinfo('google.com', 80, 0, socket.SOCK_STREAM))
+
+                async def async_connect_effects():
+                    while self.effects['connect']: self.effects['connect'].pop(0)()
+                uasyncio.create_task(async_connect_effects())
+            else:
+                log.info('network connect failed')
+                self.sta.active(False)
+                if not is_retry:
+                    if key:
+                        log.info(f'will retry connection to {ssid} every 5s')
+                        while self.sta.status() != 3:
+                            self.connect(ssid, key, True, True)
+                            time.sleep(5)
+                    else:
+                        log.info(f'will retry connection to wifi every 5s')
+                        while self.sta.status() != 3:
+                            self.connect(None, None, True, True)
+                            time.sleep(5)
+                else:
+                    log.info(f'retrying in 5s')
+        except Exception as e:
+            log.exception(e)
 
     def stop(self):
         comment('stop pico-fi')

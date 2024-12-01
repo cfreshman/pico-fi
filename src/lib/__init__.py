@@ -174,7 +174,7 @@ class LED:
     def set(self, on):
         if type(on) is float:
             self.brightness = on
-            self.on(on)
+            if self.get(): self.on(on)
         else:
             self.on(on) if on else self.off()
     def toggle(self): self.off() if self.get() else self.on()
