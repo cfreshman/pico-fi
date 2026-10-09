@@ -113,6 +113,9 @@ try:
         f"[ -d {rpi_mount_dir} ] && echo y || echo ''").read().strip()
     if _mounted():
       print(f"Found uninitialized Pico at {rpi_mount_dir}")
+      os.system(f"""
+        ls {rpi_mount_dir}
+        """)
       mp_response = input(
         "Install MicroPython for Pico W? [Y/n] ") or 'y'
       if mp_response.lower()[0] == 'y':
@@ -122,7 +125,7 @@ try:
           curl http://micropython.org/download/rp2-pico-w/rp2-pico-w-latest.uf2 > build/micropython.uf2
           """)
         os.system(f"""
-        cp build/micropython.uf2 {rpi_mount_dir}/
+        cp build/micropython.uf2 {rpi_mount_dir}/m.uf2
         """)
         print(
           'MicroPython installed, waiting for Pico to disconnect and restart')

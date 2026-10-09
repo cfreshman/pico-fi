@@ -58,8 +58,7 @@ class App:
             b'/': b'/public/index.html',
             b'/favicon.ico': b'',
             b'/get': self.get,
-            b'/set': self.set,
-            b'/api': self.api,
+            b'/set': self.set
         }
         self.events = {
             b'echo': lambda msg: msg.reply(msg.content),
