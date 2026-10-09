@@ -1,7 +1,7 @@
 import pico_fi
 
 
-pico_fi.run(id='w-pico', password='pico1234', indicator='LED')
+pico_fi.run(id='w-pico', password='pico1234', indicator='LED', ip='192.168.0.42')
 # You should see wireless network 'w-pico' appear
 # Log in with the above password
 # The on-board LED will visualize network activity

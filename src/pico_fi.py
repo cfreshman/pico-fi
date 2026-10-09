@@ -11,6 +11,7 @@ import network
 import uasyncio
 import machine
 import socket
+import random
 
 from lib.handle.dns import DNS
 from lib.handle.http import HTTP
@@ -31,17 +32,19 @@ class App:
     Design the site to offload processing & temporary storage to the client
     """
 
-    IP = '192.168.0.1'
+    AP_IP = '192.168.4.1'
     NETWORK_JSON = 'network.json'
 
-    def __init__(self, id=None, password='', indicator=None):
+    def __init__(self, id=None, password='', indicator=None, ip=None):
         self.running = False
         self.id = id
+        self.ip = ip
+
         self.sta_ip = None
         self.sta = network.WLAN(network.STA_IF)
         if self.sta.isconnected(): self.sta.disconnect()
         self.sta.active(False)
-        self.ip_sink = IpSink(App.IP)
+        self.ip_sink = IpSink(App.AP_IP)
         self.ap_ip = self.ip_sink.get()
         self.ap = network.WLAN(network.AP_IF)
         if self.ap.isconnected(): self.ap.disconnect()
@@ -276,6 +279,7 @@ class App:
 
             # force x.x.0.x IP address
             if status == 3:
+                self.sta.ifconfig('dhcp')
                 ifconfig = self.sta.ifconfig()
                 ip = ifconfig[0]
                 gateway = ifconfig[2]
@@ -283,7 +287,7 @@ class App:
                 ip_parts = ip.split('.')
                 if (ip_parts[2] != '0'):
                     ip_parts[2] = '0'
-                    ip = '.'.join(ip_parts)
+                    ip = self.ip or '.'.join(ip_parts)
                     gateway_parts = gateway.split('.')
                     gateway_parts[2] = '0'
                     gateway = '.'.join(gateway_parts)
@@ -350,7 +354,7 @@ class App:
 
     def switch(self, req: HTTP.Request, res: HTTP.Response):
         if self.ip_sink.get(): res.redirect(b'http://{:s}/portal'.format(self.ip_sink.get()))
-        else: res.redirect(b'http://{:s}/'.format(App.IP))
+        else: res.redirect(b'http://{:s}/'.format(App.AP_IP))
 
     """
     get and set query with single param data=<JSON>
@@ -462,7 +466,7 @@ class App:
             uasyncio.run(inner())
 
 
-def run(id=None, password='', indicator=None):
-    app = App(id, password, indicator)
+def run(id=None, password='', indicator=None, ip=None):
+    app = App(id, password, indicator, ip)
     app.run()
     return app
