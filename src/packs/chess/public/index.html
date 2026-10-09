@@ -5,7 +5,7 @@
   <title>chess</title><meta name="description" content="" />
   <script>
     const description = document.querySelector('[name=description]')
-    if (location.search.slice(1)) description.content = `room ${location.search.slice(1)}`
+    if (location.hash.slice(1)) description.content = `room ${location.hash.slice(1)}`
   </script>
 </head>
 <body class="column gap">
@@ -32,7 +32,7 @@
   await new Promise(resolve => ws_resolve = resolve)
 
   // listen for 'chess' socket events
-  const room_id = location.search.slice(1)
+  const room_id = location.hash.slice(1)
   const room_events_id = room_id ? `chess-${room_id}` : 'chess'
   const Socket = class {
     constructor(ws) {
@@ -679,12 +679,15 @@
   on(Q('#button_newgame'), 'click', handle.generate)
   const button_newroom = Q('#button_newroom')
   const button_shareroom = Q('#button_shareroom')
-  on(button_newroom, 'click', () => open('?'+(n => Math.floor(Math.random() * Math.pow(16, n)).toString(16).padStart(n, '0'))(4), '_self'),)
+  on(button_newroom, 'click', () => {
+    location.hash = rand.lowerhex(4)
+    location.reload()
+  },)
   on(button_shareroom, 'click', () => {
     copy(location.href)
     displayStatus(button_shareroom, 'copied!')
   })
-  // if (!location.search) button_newroom.click()
+  // if (!location.hash) button_newroom.click()
   // #endregion
 
   })()</script>

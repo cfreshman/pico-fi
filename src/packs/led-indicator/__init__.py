@@ -121,3 +121,4 @@ def configure(app: App):
     
       await uasyncio.sleep(1)
       uasyncio.create_task(listen())
+    uasyncio.create_task(listen())
